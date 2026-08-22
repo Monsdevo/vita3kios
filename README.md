@@ -16,9 +16,11 @@ Firmware kurulumuyla gerçek sistem yazılımını boot etmek farklı işlerdir;
 
 ## Durum
 
-Proje Faz 1 çıkış doğrulamasındadır. Pinli upstream macOS arm64 Release build,
-2/2 CTest ve izole GUI açılış smoke testi geçmiştir; ilk commit'ten temiz
-checkout tekrarı M0'ın son kapısıdır. Henüz kurulabilir bir iOS uygulaması yoktur.
+Faz 1 ve M0 tamamlandı. Pinli upstream, yayınlanmış ilk vita3kios commit'inden
+ayrı bir temiz klona alınarak macOS arm64 Release build, 2/2 CTest, artefakt/pin
+kontrolleri ve izole GUI açılış smoke testinden geçti. Sıradaki çalışma Faz
+2A'daki gerçek cihaz Dynarmic JIT ve MoltenVK fizibilite probe'larıdır. Henüz
+kurulabilir bir iOS uygulaması yoktur.
 
 Ana plan ve kabul ölçütleri için [ROADMAP.txt](ROADMAP.txt) dosyasına bakın.
 

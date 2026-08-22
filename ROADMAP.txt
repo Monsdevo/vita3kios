@@ -1,7 +1,7 @@
 vita3kios — ANA YOL HARİTASI
-Sürüm: 0.3
+Sürüm: 0.4
 Oluşturulma: 2026-08-22
-Durum: FAZ 1 ÇIKIŞ DOĞRULAMASI DEVAM EDİYOR
+Durum: FAZ 1 VE M0 TAMAMLANDI — FAZ 2A SIRADA
 
 ==============================================================================
 0. BU DOSYANIN ROLÜ VE DEĞİŞİKLİK KURALI
@@ -37,7 +37,9 @@ GÜNCEL DURUM
       ürün kapsamına eklendi.
   [x] Pinli upstream macOS arm64 Release build, 2/2 CTest ve izole GUI smoke
       testi mevcut çalışma ağacında geçti.
-  [~] Faz 1'in son kapısı: ilk commit ve aynı commit'ten temiz checkout tekrarı.
+  [x] İlk commit Monsdevo/vita3kios main dalına gönderildi; aynı commit ayrı,
+      recursive temiz checkout'ta build, 2/2 CTest, artefakt/pin doğrulaması ve
+      izole GUI smoke testinden geçti. M0 tamamlandı.
 
 ==============================================================================
 1. DEĞİŞMEZ ÜRÜN TANIMI
@@ -257,9 +259,9 @@ Amaç: Tekrarlanabilir, lisansı belli ve güncellenebilir bir geliştirme zemin
            tekrar edilebilir hale getir.
 
 Çıkış kapısı:
-  [~] Aynı commit temiz klasörde belgelenmiş tek komut akışıyla derleniyor.
+  [x] Aynı commit temiz klasörde belgelenmiş tek komut akışıyla derleniyor.
   [x] Upstream commit, toolchain ve lisans envanteri kayıtlı.
-  [~] M0 tamam; ilk commit'ten temiz checkout tekrarı bekleniyor.
+  [x] M0 tamam; ilk commit'ten temiz checkout tekrarı geçti.
 
 FAZ 2A — ERKEN FİZİBİLİTE KAPISI: JIT + MOLTENVK DEVICE PROBE
 Amaç: Büyük port yatırımından önce iki temel iOS varsayımını gerçek cihazda kanıtlamak.
@@ -780,12 +782,13 @@ Bir sonraki uygulama oturumunun değişmez başlangıç sırası:
           cihazdaki Developer Mode için devreye girer.
 
 Neden Xcode projesi şimdi açılmıyor:
-  - Klasör henüz Git deposu değil ve upstream/core build sınırı doğrulanmadı.
-  - Xcode template'inin yanlış target, deployment, signing ve C++ bağlantı ayarlarını
-    erkenden kalıcılaştırmasını istemiyoruz.
-  - Yalnızca Codex'in oluşturacağı küçük device probe target'ları daha erken gelir;
-    bunlar ürün UI projesi değildir. SwiftUI ürün shell'ini core artifact/bridge
-    sözleşmesine göre tek seferde kontrollü kurmak daha az proje dosyası churn'ü yaratır.
+  - Kök Git deposu ve upstream/core macOS baseline artık doğrulandı; sıradaki
+    kapı ürün uygulaması değil, iki küçük gerçek-cihaz fizibilite probe'udur.
+  - Xcode template'inin target, deployment, signing ve C++ bağlantı kararlarını
+    probe sonuçlarından önce ürün projesine kalıcılaştırmayacağız.
+  - Codex'in oluşturacağı Dynarmic ve MoltenVK probe target'ları ürün UI projesi
+    değildir. SwiftUI ürün shell'i core artifact/bridge sözleşmesine göre Faz 2B
+    kapısında kontrollü oluşturulacaktır.
 
 ==============================================================================
 8. DOĞRULANMIŞ BAŞLANGIÇ KAYNAKLARI (2026-08-22 SNAPSHOT)
@@ -840,3 +843,11 @@ Neden Xcode projesi şimdi açılmıyor:
   - Artifact hash, pin, test ve smoke doğrulayıcıları tek belgelenmiş komut
     zincirine bağlandı.
   - M0'ın kapanışı ilk commit'ten temiz checkout tekrarına bırakıldı.
+
+2026-08-22 — v0.4
+  - İlk baseline commit'i e832ba908f58b90f9286d8197607b8c2be9f7819,
+    Monsdevo/vita3kios main dalından yeni bir recursive temiz klona alındı.
+  - Önbelleksiz Release build ve staged ad-hoc codesign, artefakt/pin kontrolleri,
+    2/2 CTest ve izole GUI smoke testi temiz klonda tekrar geçti.
+  - Faz 1 çıkış kapısı ile M0 kapatıldı; sıradaki çalışma Faz 2A gerçek cihaz
+    Dynarmic JIT ve MoltenVK probe kapısı olarak sabitlendi.

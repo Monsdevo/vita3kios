@@ -56,9 +56,10 @@ Third-party test suites are disabled by upstream configuration.
 
 ## Verified run — 2026-08-22
 
-The recorded run used the source and toolchain above. The repository commit is
-recorded in the follow-up evidence commit after the initial project commit; no
-source file in the pinned Vita3K submodule remained modified.
+The recorded run used the source and toolchain above. The first published
+vita3kios baseline commit is
+`e832ba908f58b90f9286d8197607b8c2be9f7819`; no source file in the pinned
+Vita3K submodule remained modified.
 
 ```text
 configure_generator=Xcode
@@ -89,6 +90,34 @@ initialization marker, then force-terminated the upstream GUI after its ignored
 SIGTERM and removed the entire stage. It did not touch the user's normal Vita3K
 storage.
 
+## Clean-checkout reproduction — 2026-08-22
+
+The committed repository was cloned recursively from
+`https://github.com/Monsdevo/vita3kios.git` into a new temporary directory at
+the exact app commit above. With no build cache from the working copy, the
+documented command flow produced the same result:
+
+```text
+bootstrap=passed
+upstream_pin=496939b602703951277263c7b3e60a9ae36879c1
+recursive_submodules=41 clean
+configure_time=576.0s
+release_build=passed
+staged_adhoc_codesign=passed
+artifact_hashes=2/2 passed
+ctest=2/2 passed
+ctest_time=2.20s
+gui_smoke=passed
+executable=Mach-O 64-bit arm64
+root_worktree=clean
+upstream_worktree=clean
+```
+
+The generated clean-clone project again contained neither `/opt/local` nor
+`-ld64`, and its link settings included `libboost_filesystem.a`. `otool -L`
+again showed only Apple system libraries/frameworks and Qt frameworks embedded
+under `@executable_path/../Frameworks`. This closes the M0 reproducibility gate.
+
 ## Artifact verification
 
 ```text
@@ -112,7 +141,7 @@ Both entries passed `Scripts/verify-upstream-artifacts.sh`.
 - Upstream emits existing conversion, deprecation and switch warnings. They are
   baseline debt, not permission for warnings in new vita3kios port code.
 
-## Remaining M0 evidence
+## M0 evidence
 
 - [x] macOS arm64 configure succeeds.
 - [x] `vita3k` Release build succeeds.
@@ -120,4 +149,4 @@ Both entries passed `Scripts/verify-upstream-artifacts.sh`.
 - [x] Built executable is arm64 and its dynamic links are recorded.
 - [x] Downloaded MoltenVK and FFmpeg artifacts are checksummed.
 - [x] Isolated GUI initialization smoke passes.
-- [ ] Repeat the documented flow from the first committed clean checkout.
+- [x] Repeat the documented flow from the first committed clean checkout.
