@@ -10,14 +10,30 @@ physical-device iPhoneOS SDK as arm64-only application bundles. The Dynarmic
 target contains fixed ARMv7 arithmetic, flags, branch, callback-memory, code
 invalidation, cache-clear, and executable-memory tests. The MoltenVK target
 creates a UIKit-owned `CAMetalLayer`, builds a Vulkan surface and swapchain,
-records a clear pass, presents it, and emits a capability report.
+presents a clear frame and a triangle using pinned Vita3K overlay SPIR-V, and
+emits a capability report.
 
 The verified MoltenVK input is the official v1.4.1 iOS archive with SHA-256
 `54336b90212c390ed5935c96460aed3bf651ad7d3c0f0e956586ce18e9c0b701`.
 Artifact inspection reports one arm64 slice and no Qt, host-machine, or dynamic
-MoltenVK dependency. The bundles are currently unsigned. No physical-device
-runtime result is claimed, and M1/M2 remain open until signed runs produce the
-required consecutive JIT and clear/triangle presentation evidence.
+MoltenVK dependency. Development-signed bundles were built and their effective
+`get-task-allow` entitlement was inspected locally without recording personal
+signing data. No physical-device runtime pass is claimed, and M1/M2 remain open
+until signed runs produce the required consecutive JIT and clear/triangle
+presentation evidence.
+
+## M3 scaffold evidence
+
+The generated SwiftUI product target builds for macOS-host tests, iOS Simulator,
+and arm64 iPhoneOS. A versioned C ABI owns opaque core handles, typed results,
+version/capability queries, and exception containment. Its bootstrap self-test
+directly compiles and exercises the pinned upstream Vita3K bitmap allocator.
+
+The Simulator app launches, writes a passing `m3-core-report.json`, and displays
+the returned ABI, upstream version, commit, platform, and allocator result. A
+development-signed arm64 product bundle also passes signature and dependency
+inspection and installs on the recorded iPhone. The device was locked when the
+launch was attempted, so the physical-device report and M3 remain open.
 
 ## Direct Game Mode
 

@@ -1,7 +1,7 @@
 # Building
 
-The project is not yet buildable as an iOS application. Phase 1 first establishes
-a reproducible upstream macOS arm64 baseline.
+The project includes a generated Apple-native SwiftUI scaffold and a minimal
+versioned Vita3KCore C ABI. The complete emulator is not yet linked or playable.
 
 ## Toolchain
 
@@ -80,5 +80,34 @@ git -C External/Vita3K status --short --ignore-submodules=none
 ```
 
 The checked toolchain, artifact hashes and baseline results live under
-`Docs/Audits`. This phase produces a macOS reference build only; it does not yet
-produce the vita3kios iOS application.
+`Docs/Audits`. This phase produces the macOS reference build used to validate
+the upstream pin.
+
+## M3 application scaffold
+
+The checked-in source of truth is `App/CMakeLists.txt`; generated Xcode projects
+stay under ignored build directories. Build and test the C ABI on the host:
+
+```sh
+Scripts/build-app.sh host
+```
+
+Build the SwiftUI shell for Simulator or an unsigned arm64 iPhoneOS artifact:
+
+```sh
+Scripts/build-app.sh simulator
+Scripts/build-app.sh device
+```
+
+Local signing values must be supplied through environment variables and must
+never be committed:
+
+```sh
+VITA3KIOS_SIGNING=YES \
+VITA3KIOS_DEVELOPMENT_TEAM=YOUR_TEAM_ID \
+VITA3KIOS_PRODUCT_BUNDLE_IDENTIFIER=your.reverse.dns.vita3kios \
+Scripts/build-app.sh device
+```
+
+Signed products are generated under the system temporary directory by default.
+Use `Docs/DEVICE_TESTING.md` for physical-device milestone validation.

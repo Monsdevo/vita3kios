@@ -1,0 +1,45 @@
+import SwiftUI
+
+struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Bindable var core: CoreStatusModel
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Boot") {
+                    Label("Direct Game", systemImage: "play.fill")
+                    Label("System Software", systemImage: "rectangle.inset.filled")
+                }
+
+                Section("Core") {
+                    LabeledContent("ABI version", value: "\(core.abiVersion)")
+                    LabeledContent("Architecture", value: core.platform)
+                    LabeledContent("Direct Game", value: availability(CoreCapability.directGame))
+                    LabeledContent("System Software", value: availability(CoreCapability.systemSoftware))
+                }
+
+                Section("Interface") {
+                    LabeledContent("Design", value: "Apple Native")
+                    LabeledContent("Accent", value: "PlayStation-inspired")
+                }
+
+                Section {
+                    Text("Detailed global, boot-mode, and per-title controls will appear only when their core capabilities become functional.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func availability(_ bit: UInt64) -> String {
+        core.has(bit) ? "Available" : "Not implemented"
+    }
+}

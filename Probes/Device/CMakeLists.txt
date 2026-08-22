@@ -144,6 +144,19 @@ if(VITA3KIOS_ENABLE_MOLTENVK_PROBE)
         "${VITA3KIOS_SHARED_SOURCE}"
         MoltenVK/MoltenVKProbeRunner.mm
     )
+    set(VITA3KIOS_TRIANGLE_VERTEX_SHADER
+        "${VITA3KIOS_ROOT}/External/Vita3K/vita3k/shaders-builtin/overlay/overlay.vert.spv")
+    set(VITA3KIOS_TRIANGLE_FRAGMENT_SHADER
+        "${VITA3KIOS_ROOT}/External/Vita3K/vita3k/shaders-builtin/overlay/overlay.frag.spv")
+    set_source_files_properties(
+        "${VITA3KIOS_TRIANGLE_VERTEX_SHADER}"
+        "${VITA3KIOS_TRIANGLE_FRAGMENT_SHADER}"
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/ProbeShaders"
+    )
+    target_sources(Vita3KiOSMoltenVKProbe PRIVATE
+        "${VITA3KIOS_TRIANGLE_VERTEX_SHADER}"
+        "${VITA3KIOS_TRIANGLE_FRAGMENT_SHADER}"
+    )
     vita3kios_configure_probe(Vita3KiOSMoltenVKProbe "vita3kios MoltenVK Probe" moltenvk)
     target_compile_definitions(Vita3KiOSMoltenVKProbe PRIVATE
         VITA3KIOS_PROBE_USES_METAL=1

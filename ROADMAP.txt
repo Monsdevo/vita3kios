@@ -1,7 +1,7 @@
 vita3kios — MASTER ROADMAP
-Version: 0.5
+Version: 0.6
 Created: 2026-08-22
-Status: PHASE 1 AND M0 COMPLETE — PHASE 2A IN PROGRESS
+Status: M0 COMPLETE — M1, M2, AND M3 DEVICE EVIDENCE IN PROGRESS
 
 ==============================================================================
 0. AUTHORITY AND CHANGE RULES
@@ -45,9 +45,12 @@ CURRENT STATUS
       recursive clean checkout. M0 is complete.
   [x] The root remote is https://github.com/Monsdevo/vita3kios.git and no
       vita3kios changes are committed inside the upstream submodule.
-  [~] Phase 2A probe sources exist. Unsigned iPhoneOS arm64 Release builds for
-      the isolated Dynarmic JIT and static MoltenVK probes succeed.
-  [ ] M1 and M2 remain open until signed physical-device runtime evidence passes.
+  [~] Signed arm64 Dynarmic and static MoltenVK probes build and pass artifact
+      inspection. The MoltenVK probe includes clear and triangle presentation.
+  [~] A minimal Apple-native SwiftUI product, versioned C ABI, and pinned Vita3K
+      allocator self-test pass host and Simulator smoke tests. Its signed arm64
+      bundle installs on the recorded device.
+  [ ] M1, M2, and M3 remain open until signed physical-device runtime reports pass.
 
 ==============================================================================
 1. FIXED PRODUCT DEFINITION
@@ -81,9 +84,9 @@ Core product:
     The HUD is configurable and may be disabled; Compact is the default preset.
 
 Initial distribution target:
-  - Developer-signed or sideloaded IPA on a physical device.
+  - Permanently user-built, developer-signed, or sideloaded IPA on a physical device.
   - Explicitly enabled JIT for the performance build.
-  - App Store distribution is a later decision gate, not a promise.
+  - App Store and TestFlight distribution are not product targets.
 
 Out of scope:
   - Distributing Sony firmware, games, licenses, keys, or decryption data.
@@ -243,11 +246,12 @@ PHASE 2A — EARLY FEASIBILITY: JIT AND MOLTENVK DEVICE PROBES
 Goal: Prove the two highest-risk iOS assumptions before product UI investment.
 
   [~] 2A.1 Record the physical device, SoC/RAM, iOS version, Developer Mode, and
-           development/sideload signing method. Device and OS are known; runtime
-           RAM evidence and a usable local signing identity are still pending.
+           development/sideload signing method. Device, OS, Developer Mode, and
+           a usable local development identity are known; runtime RAM evidence
+           remains pending.
   [x] 2A.2 Build an arm64 iPhoneOS probe from pinned Dynarmic and the smallest
            dependency graph without linking full Vita3KCore.
-  [ ] 2A.3 Inspect actual entitlements and embedded provisioning data from the
+  [x] 2A.3 Inspect actual entitlements and embedded provisioning data from the
           signed probe; never infer them only from project settings.
   [ ] 2A.4 Validate StikDebug prerequisites: pairing file, loopback VPN,
           personalized DDI mount, and get-task-allow.
@@ -257,13 +261,13 @@ Goal: Prove the two highest-risk iOS assumptions before product UI investment.
   [ ] 2A.6 Record Xcode launch, StikDebug launch, force-quit/relaunch, and device
           reboot behavior separately.
   [~] 2A.7 Build a separate UIKit/CAMetalLayer MoltenVK probe and present a clear
-           and triangle frame. The unsigned clear-frame target builds; signed
-           physical-device presentation and triangle evidence are pending.
+           and triangle frame. The signed pipeline uses pinned Vita3K SPIR-V and
+           passes compile/link inspection; physical presentation is pending.
   [~] 2A.8 Report portability, fragment interlock/raster order, swizzle, texture
            formats, and surface extensions. Initial report code exists; functional
            swizzle and the complete renderer format matrix remain pending.
   [x] 2A.9 Verify one arm64 iOS slice and no unexpected standalone/dynamic or
-           host-machine libraries in both unsigned compile artifacts.
+           host-machine libraries in both signed compile artifacts.
   [~] 2A.10 Record device/OS/toolchain/commit/log results in Docs/FEASIBILITY.md.
             Compile evidence is recorded; signed runtime logs remain pending.
 
@@ -271,22 +275,29 @@ Exit gate:
   [ ] Dynarmic tests pass 20 consecutive times on the same physical device.
   [ ] MoltenVK surface, clear frame, and triangle pass on the physical device.
   [ ] M1 and M2 complete.
-  [ ] If the gate fails, do not expand native UI implementation. Record a [!]
-      blocker, evidence, and attempted remedies, then continue safe alternatives.
+  [ ] If the gate fails, do not expand beyond the minimal M3 UI scaffold. Record
+      a [!] blocker, evidence, and attempted remedies, then continue safe alternatives.
 
 PHASE 2B — CORE/GUI SEPARATION AND C ABI
 Goal: Produce a testable Vita3KCore without Qt or desktop main().
 
   [ ] 2B.1 Audit main.cpp, interface.cpp, Android/JNI, and CMake target boundaries.
   [ ] 2B.2 Separate required core modules from Qt/Discord/desktop/debug-only code.
-  [ ] 2B.3 Add create/destroy/initialize/shutdown lifecycle.
-  [ ] 2B.4 Define ABI version, capability, error, callback, and value types in C.
-  [ ] 2B.5 Define ownership, callback threads, string lifetime, and exception rules.
+  [~] 2B.3 Add create/destroy/initialize/shutdown lifecycle. Opaque create/destroy
+           exists; full initialization and shutdown remain pending.
+  [~] 2B.4 Define ABI version, capability, error, callback, and value types in C.
+           Version, capability, result, handle, and info types exist; callbacks
+           and full value descriptors remain pending.
+  [~] 2B.5 Define ownership, callback threads, string lifetime, and exception rules.
+           Bootstrap ownership, string lifetime, thread safety, and exception
+           containment are defined; callback threading remains pending.
   [ ] 2B.6 Expose UI-free firmware/package install, title enumeration, boot, and stop.
   [ ] 2B.7 Serialize core operations and safely forward progress/log callbacks.
-  [ ] 2B.8 Build a macOS host harness with negative state-machine tests.
+  [~] 2B.8 Build a macOS host harness with negative state-machine tests. Bootstrap
+           handle, invalid-argument, invalid-handle, info, and allocator tests pass.
   [ ] 2B.9 Prototype a CMake-exported static framework/XCFramework.
-  [ ] 2B.10 Prove the core target links without Qt or desktop main().
+  [~] 2B.10 Prove the core target links without Qt or desktop main(). The minimal
+           allocator-backed bootstrap target passes; the full core split remains.
 
 Exit gate:
   [ ] Host harness passes init -> enumerate -> shutdown and error paths.
@@ -314,16 +325,19 @@ Exit gate:
 PHASE 3 — iOS BUILD SPIKE AND DEPENDENCY CLEANUP
 Goal: Produce a real iOS arm64 core binary and classify every blocker.
 
-  [ ] 3.1 Create iOS arm64 CMake preset/toolchain; provisional target iOS 17.4.
-  [ ] 3.2 Compile the smallest Bridge+Core target for iphoneos first.
+  [x] 3.1 Create an iOS arm64 CMake generation path; provisional target iOS 17.4.
+  [x] 3.2 Compile the smallest Bridge+Core target for iphoneos first.
   [ ] 3.3 Classify each dependency as native, small-patch, desktop-only, or replace.
   [ ] 3.4 Adapt signals, mmap/mprotect, locks, sockets, threads, locale, env, paths.
   [ ] 3.5 Define Application Support, Caches, Logs, Imports/Staging, and Backups.
   [ ] 3.6 Persist relative identities, never absolute container paths.
-  [ ] 3.7 Scaffold an empty SwiftUI shell with bridge version/capability display.
-  [ ] 3.8 Run Simulator UI/bridge smoke and physical-device arm64 link/load smoke.
-  [ ] 3.9 Produce controlled device and optional Simulator artifacts.
-  [ ] 3.10 Classify warnings and keep new port code warning-free.
+  [x] 3.7 Scaffold an empty SwiftUI shell with bridge version/capability display.
+  [~] 3.8 Run Simulator UI/bridge smoke and physical-device arm64 link/load smoke.
+          Simulator launch/report passes; physical device launch was blocked by
+          the locked device after successful installation.
+  [x] 3.9 Produce controlled signed/unsigned device and Simulator artifacts.
+  [~] 3.10 Classify warnings and keep new port code warning-free. Port code is
+           warning-free; known pinned allocator conversion warnings are isolated.
 
 Exit gate:
   [ ] Physical-device app loads Vita3KCore and returns version/capabilities.
@@ -549,7 +563,9 @@ Exit gate:
 
 PHASE 13 — ALPHA UX, POLISH, AND ACCESSIBILITY
 
-  [ ] 13.1 Apple-native design system using system colors, materials, and SF Symbols.
+  [~] 13.1 Apple-native design system using system colors, materials, and SF Symbols.
+           The M3 scaffold establishes the base language with restrained
+           PlayStation-inspired accent details; full component coverage is pending.
   [ ] 13.2 iPhone portrait library and controlled gameplay orientation.
   [ ] 13.3 iPad pointer/keyboard/controller focus and multiwindow decision.
   [ ] 13.4 Non-blocking progress and cancellation for import/boot.
@@ -565,16 +581,16 @@ Exit gate:
 
 PHASE 14 — PACKAGING, OPEN SOURCE, AND DISTRIBUTION
 
-  [ ] 14.1 Separate Debug, Sideload Release, and possible Store flavors.
+  [ ] 14.1 Separate Debug and Sideload Release flavors.
   [ ] 14.2 Script unsigned/signed IPA; never commit personal certificate/profile.
   [ ] 14.3 Package only required arm64 code/assets; verify no desktop dylib or Qt.
   [ ] 14.4 Ship GPL corresponding source offer, commits, submodules, and build guide.
   [ ] 14.5 Third-party notices, privacy manifest, export, and trademark text.
   [ ] 14.6 Publish AltStore/SideStore metadata only after a stable alpha.
   [ ] 14.7 Document Developer Mode, signing, JIT readiness, and Files import.
-  [?] 14.8 Re-evaluate current App Review rules, JIT limits, interpreter viability,
-           downloadable-code/metadata obligations, age rating, GPL, and store terms.
-           Do not publish a Store flavor unless every requirement passes.
+  [x] 14.8 CANCELLED: App Store/TestFlight distribution is outside the permanent
+           product definition. Sideload signing, JIT, GPL, privacy, and content
+           obligations remain mandatory for every distributed build.
   [ ] 14.9 Publish checksums, changelog, known issues, and device matrix.
 
 Exit gate:
@@ -628,7 +644,8 @@ R6 — Fast upstream change
 
 R7 — Licensing and distribution
   Impact: inability to distribute or GPL violation.
-  Response: corresponding source mapping, manifest, notices, and a separate Store gate.
+  Response: corresponding source mapping, manifest, notices, and a documented
+  self-sign/sideload release gate.
 
 R8 — Content and trademarks
   Impact: legal and project risk.
@@ -659,7 +676,8 @@ Continuous groups:
 7. FIXED NEAR-TERM EXECUTION ORDER
 ==============================================================================
 
-The user must not create the product Xcode project yet.
+The user does not need to create or maintain a product Xcode project manually.
+`App/CMakeLists.txt` generates the controlled project in ignored build paths.
 
   [x] A. Create root Git repository and foundation files.
   [x] B. Pin script-local Xcode path and capture toolchain.
@@ -667,15 +685,15 @@ The user must not create the product Xcode project yet.
   [x] D. Inventory licenses and dependencies.
   [x] E. Pass clean upstream macOS arm64 build/test/smoke.
   [~] F. Build isolated Dynarmic and MoltenVK device probes and pass device gates.
-  [ ] G. Document the headless core boundary from main/interface/Android layers.
-  [ ] H. Create the controlled Vita3KiOS SwiftUI scaffold only after feasibility
-          and the core boundary are proven.
-  [ ] I. At the signed-device gate, the user selects an Xcode Team, unique bundle
-          prefix, and confirms Developer Mode.
+  [~] G. Document the headless core boundary from main/interface/Android layers.
+  [x] H. Create the controlled minimal Vita3KiOS SwiftUI M3 scaffold authorized
+          for M1–M3 validation; do not expand into later product features yet.
+  [x] I. At the signed-device gate, the user selects an Xcode Team, unique bundle
+          prefix, and confirms Developer Mode. Values remain local.
 
-The generated probe Xcode projects under ignored Build/ are not the product
-project. Product target, deployment, signing, and C++ linkage decisions must be
-informed by probe evidence.
+Generated Xcode projects under ignored build paths are disposable products of
+checked-in CMake source. Target, deployment, signing, and C++ linkage decisions
+remain informed by probe evidence.
 
 ==============================================================================
 8. VERIFIED STARTING REFERENCES — 2026-08-22 SNAPSHOT
@@ -689,8 +707,6 @@ informed by probe evidence.
     https://github.com/XITRIX/RPCS3-iOS-Releases
   - StikDebug: https://github.com/StikDebug/StikDebug
   - StikJIT: https://github.com/StikDebug/StikJIT
-  - Apple App Review Guidelines:
-    https://developer.apple.com/app-store/review/guidelines/
   - Apple allow-jit entitlement:
     https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.allow-jit
   - Apple MTKView: https://developer.apple.com/documentation/metalkit/mtkview
@@ -704,7 +720,7 @@ informed by probe evidence.
 2026-08-22 — v0.1
   - Created the detailed roadmap.
   - Selected SwiftUI + C ABI + Vita3KCore + MoltenVK architecture.
-  - Separated JIT and App Store paths.
+  - Established the initial JIT and distribution constraints.
   - Decided not to create the product Xcode project yet.
 
 2026-08-22 — v0.2
@@ -730,3 +746,14 @@ informed by probe evidence.
   - Added isolated Dynarmic and MoltenVK device-probe scaffolding.
   - Verified unsigned iPhoneOS arm64 Release builds for both probes.
   - Kept M1/M2 open pending signed physical-device runtime evidence.
+
+2026-08-22 — v0.6
+  - Fixed self-sign/sideload as the permanent distribution model and removed
+    App Store/TestFlight from the product roadmap.
+  - Built and inspected development-signed Dynarmic and MoltenVK arm64 probes.
+  - Added clear and triangle presentation using pinned Vita3K overlay SPIR-V.
+  - Added a versioned C ABI, pinned Vita3K allocator bootstrap test, host tests,
+    and an Apple-native SwiftUI M3 scaffold with restrained controller accents.
+  - Passed Simulator UI/core-report smoke and installed the signed product on a
+    physical iPhone; the device was locked, so M1–M3 runtime gates remain open.
+  - Added local device-gate automation and strict JSON evidence validation.

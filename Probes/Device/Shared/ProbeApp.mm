@@ -80,7 +80,8 @@ NSData* NormalizedReportData(const std::string& result,
     }
 
     if ([report isKindOfClass:[NSDictionary class]]) {
-        NSDictionary* dictionary = (NSDictionary*)report;
+        NSMutableDictionary* dictionary = [(NSDictionary*)report mutableCopy];
+        dictionary[@"harnessTimestamp"] = ISO8601Timestamp();
         BOOL succeeded = NO;
         id passed = dictionary[@"passed"];
         id status = dictionary[@"status"];
@@ -95,7 +96,7 @@ NSData* NormalizedReportData(const std::string& result,
         if (runnerSucceeded != nullptr) {
             *runnerSucceeded = succeeded;
         }
-        return JSONData(report);
+        return JSONData(dictionary);
     }
 
     if (isValidRunnerReport != nullptr) {
@@ -202,6 +203,7 @@ NSString* StringFromReportData(NSData* data) {
 @property(nonatomic, strong) UIButton* runButton;
 @property(nonatomic, strong) UILabel* statusLabel;
 @property(nonatomic, strong) UITextView* reportTextView;
+@property(nonatomic) BOOL didStartAutomaticRun;
 @end
 
 @implementation Vita3KiOSProbeViewController {
@@ -315,6 +317,18 @@ NSString* StringFromReportData(NSData* data) {
         [self.runButton.heightAnchor constraintGreaterThanOrEqualToConstant:48.0],
         [self.reportTextView.heightAnchor constraintEqualToConstant:260.0],
     ]];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (self.didStartAutomaticRun) {
+        return;
+    }
+    self.didStartAutomaticRun = YES;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+      [self runProbe:self.runButton];
+    });
 }
 
 - (void)runProbe:(UIButton*)sender {

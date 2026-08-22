@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -146,6 +147,13 @@ struct VulkanState {
     VkDevice device = VK_NULL_HANDLE;
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
     VkRenderPass renderPass = VK_NULL_HANDLE;
+    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    VkShaderModule vertexShader = VK_NULL_HANDLE;
+    VkShaderModule fragmentShader = VK_NULL_HANDLE;
+    VkBuffer vertexBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory vertexMemory = VK_NULL_HANDLE;
     VkCommandPool commandPool = VK_NULL_HANDLE;
     VkSemaphore imageAvailable = VK_NULL_HANDLE;
     VkSemaphore renderFinished = VK_NULL_HANDLE;
@@ -160,6 +168,15 @@ struct VulkanState {
             if (renderFinished != VK_NULL_HANDLE) vkDestroySemaphore(device, renderFinished, nullptr);
             if (imageAvailable != VK_NULL_HANDLE) vkDestroySemaphore(device, imageAvailable, nullptr);
             if (commandPool != VK_NULL_HANDLE) vkDestroyCommandPool(device, commandPool, nullptr);
+            if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
+            if (pipelineLayout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+            if (descriptorSetLayout != VK_NULL_HANDLE) {
+                vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+            }
+            if (vertexShader != VK_NULL_HANDLE) vkDestroyShaderModule(device, vertexShader, nullptr);
+            if (fragmentShader != VK_NULL_HANDLE) vkDestroyShaderModule(device, fragmentShader, nullptr);
+            if (vertexBuffer != VK_NULL_HANDLE) vkDestroyBuffer(device, vertexBuffer, nullptr);
+            if (vertexMemory != VK_NULL_HANDLE) vkFreeMemory(device, vertexMemory, nullptr);
             for (VkFramebuffer framebuffer : framebuffers) {
                 vkDestroyFramebuffer(device, framebuffer, nullptr);
             }
@@ -178,6 +195,56 @@ struct VulkanState {
         }
     }
 };
+
+uint32_t FindMemoryType(const VkPhysicalDeviceMemoryProperties& properties,
+                        uint32_t allowedTypes,
+                        VkMemoryPropertyFlags requiredFlags) {
+    for (uint32_t index = 0; index < properties.memoryTypeCount; ++index) {
+        const bool allowed = (allowedTypes & (1U << index)) != 0;
+        const bool supported =
+            (properties.memoryTypes[index].propertyFlags & requiredFlags) == requiredFlags;
+        if (allowed && supported) {
+            return index;
+        }
+    }
+    throw std::runtime_error("no compatible Vulkan memory type was found");
+}
+
+VkShaderModule LoadShaderModule(VkDevice device, NSString* name, NSString* extension) {
+    NSString* path = [NSBundle.mainBundle pathForResource:name
+                                                   ofType:extension
+                                              inDirectory:@"ProbeShaders"];
+    if (path == nil) {
+        throw std::runtime_error("a bundled triangle SPIR-V fixture is missing");
+    }
+    NSData* data = [NSData dataWithContentsOfFile:path];
+    if (data == nil || data.length == 0 || (data.length % sizeof(uint32_t)) != 0) {
+        throw std::runtime_error("a bundled triangle SPIR-V fixture is invalid");
+    }
+    VkShaderModuleCreateInfo createInfo =
+        VulkanStructure<VkShaderModuleCreateInfo>(VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO);
+    createInfo.codeSize = data.length;
+    createInfo.pCode = static_cast<const uint32_t*>(data.bytes);
+    VkShaderModule module = VK_NULL_HANDLE;
+    Check(vkCreateShaderModule(device, &createInfo, nullptr, &module), "vkCreateShaderModule");
+    return module;
+}
+
+struct alignas(16) OverlayPushConstants {
+    float uiScale[4];
+    float albedo[4];
+    float viewport[4];
+    float clipBounds[4];
+    uint32_t vertexConfig;
+    uint32_t fragmentConfig;
+    float timestamp;
+    float blurIntensity;
+    float sdfParams[4];
+    float sdfOrigin[4];
+    float sdfBorderColor[4];
+};
+
+static_assert(sizeof(OverlayPushConstants) == 128);
 
 VkCompositeAlphaFlagBitsKHR ChooseCompositeAlpha(VkCompositeAlphaFlagsKHR supported) {
     constexpr std::array<VkCompositeAlphaFlagBitsKHR, 4> candidates = {
@@ -467,6 +534,10 @@ void RunVulkan(CAMetalLayer* metalLayer, NSMutableDictionary* report) {
           "vkGetPhysicalDeviceSurfacePresentModesKHR(data)");
 
     VkSurfaceFormatKHR selectedFormat = surfaceFormats.front();
+    if (surfaceFormats.size() == 1 && selectedFormat.format == VK_FORMAT_UNDEFINED) {
+        selectedFormat.format = VK_FORMAT_B8G8R8A8_UNORM;
+        selectedFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    }
     for (const VkSurfaceFormatKHR& candidate : surfaceFormats) {
         if (candidate.format == VK_FORMAT_B8G8R8A8_UNORM &&
             candidate.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
@@ -583,6 +654,158 @@ void RunVulkan(CAMetalLayer* metalLayer, NSMutableDictionary* report) {
     Check(vkCreateRenderPass(state.device, &renderPassInfo, nullptr, &state.renderPass),
           "vkCreateRenderPass");
 
+    state.vertexShader = LoadShaderModule(state.device, @"overlay", @"vert.spv");
+    state.fragmentShader = LoadShaderModule(state.device, @"overlay", @"frag.spv");
+
+    std::array<VkDescriptorSetLayoutBinding, 2> descriptorBindings{};
+    descriptorBindings[0].binding = 0;
+    descriptorBindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptorBindings[0].descriptorCount = 1;
+    descriptorBindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    descriptorBindings[1].binding = 1;
+    descriptorBindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptorBindings[1].descriptorCount = 1;
+    descriptorBindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo =
+        VulkanStructure<VkDescriptorSetLayoutCreateInfo>(
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
+    descriptorLayoutInfo.bindingCount = static_cast<uint32_t>(descriptorBindings.size());
+    descriptorLayoutInfo.pBindings = descriptorBindings.data();
+    Check(vkCreateDescriptorSetLayout(state.device, &descriptorLayoutInfo, nullptr,
+                                      &state.descriptorSetLayout),
+          "vkCreateDescriptorSetLayout");
+
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(OverlayPushConstants);
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo =
+        VulkanStructure<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &state.descriptorSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+    Check(vkCreatePipelineLayout(state.device, &pipelineLayoutInfo, nullptr,
+                                 &state.pipelineLayout),
+          "vkCreatePipelineLayout");
+
+    std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages{
+        VulkanStructure<VkPipelineShaderStageCreateInfo>(
+            VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO),
+        VulkanStructure<VkPipelineShaderStageCreateInfo>(
+            VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO),
+    };
+    shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    shaderStages[0].module = state.vertexShader;
+    shaderStages[0].pName = "main";
+    shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shaderStages[1].module = state.fragmentShader;
+    shaderStages[1].pName = "main";
+
+    VkVertexInputBindingDescription vertexBinding{};
+    vertexBinding.binding = 0;
+    vertexBinding.stride = sizeof(float) * 4;
+    vertexBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    VkVertexInputAttributeDescription vertexAttribute{};
+    vertexAttribute.location = 0;
+    vertexAttribute.binding = 0;
+    vertexAttribute.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    vertexAttribute.offset = 0;
+    VkPipelineVertexInputStateCreateInfo vertexInput =
+        VulkanStructure<VkPipelineVertexInputStateCreateInfo>(
+            VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
+    vertexInput.vertexBindingDescriptionCount = 1;
+    vertexInput.pVertexBindingDescriptions = &vertexBinding;
+    vertexInput.vertexAttributeDescriptionCount = 1;
+    vertexInput.pVertexAttributeDescriptions = &vertexAttribute;
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly =
+        VulkanStructure<VkPipelineInputAssemblyStateCreateInfo>(
+            VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO);
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    VkViewport viewport{};
+    viewport.width = static_cast<float>(extent.width);
+    viewport.height = static_cast<float>(extent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    VkRect2D scissor{{0, 0}, extent};
+    VkPipelineViewportStateCreateInfo viewportState =
+        VulkanStructure<VkPipelineViewportStateCreateInfo>(
+            VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+    VkPipelineRasterizationStateCreateInfo rasterization =
+        VulkanStructure<VkPipelineRasterizationStateCreateInfo>(
+            VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
+    rasterization.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterization.cullMode = VK_CULL_MODE_NONE;
+    rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterization.lineWidth = 1.0f;
+    VkPipelineMultisampleStateCreateInfo multisample =
+        VulkanStructure<VkPipelineMultisampleStateCreateInfo>(
+            VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
+    multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    VkPipelineColorBlendAttachmentState blendAttachment{};
+    blendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                     VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    VkPipelineColorBlendStateCreateInfo colorBlend =
+        VulkanStructure<VkPipelineColorBlendStateCreateInfo>(
+            VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
+    colorBlend.attachmentCount = 1;
+    colorBlend.pAttachments = &blendAttachment;
+    VkGraphicsPipelineCreateInfo pipelineInfo =
+        VulkanStructure<VkGraphicsPipelineCreateInfo>(
+            VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
+    pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+    pipelineInfo.pStages = shaderStages.data();
+    pipelineInfo.pVertexInputState = &vertexInput;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterization;
+    pipelineInfo.pMultisampleState = &multisample;
+    pipelineInfo.pColorBlendState = &colorBlend;
+    pipelineInfo.layout = state.pipelineLayout;
+    pipelineInfo.renderPass = state.renderPass;
+    Check(vkCreateGraphicsPipelines(state.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
+                                    &state.pipeline),
+          "vkCreateGraphicsPipelines");
+
+    const std::array<std::array<float, 4>, 3> triangleVertices = {{
+        {{static_cast<float>(extent.width) * 0.50f,
+          static_cast<float>(extent.height) * 0.18f, 0.0f, 0.0f}},
+        {{static_cast<float>(extent.width) * 0.18f,
+          static_cast<float>(extent.height) * 0.82f, 0.0f, 0.0f}},
+        {{static_cast<float>(extent.width) * 0.82f,
+          static_cast<float>(extent.height) * 0.82f, 0.0f, 0.0f}},
+    }};
+    VkBufferCreateInfo vertexBufferInfo =
+        VulkanStructure<VkBufferCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
+    vertexBufferInfo.size = sizeof(triangleVertices);
+    vertexBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    vertexBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    Check(vkCreateBuffer(state.device, &vertexBufferInfo, nullptr, &state.vertexBuffer),
+          "vkCreateBuffer(vertex)");
+    VkMemoryRequirements vertexMemoryRequirements{};
+    vkGetBufferMemoryRequirements(state.device, state.vertexBuffer, &vertexMemoryRequirements);
+    VkMemoryAllocateInfo vertexMemoryInfo =
+        VulkanStructure<VkMemoryAllocateInfo>(VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO);
+    vertexMemoryInfo.allocationSize = vertexMemoryRequirements.size;
+    vertexMemoryInfo.memoryTypeIndex = FindMemoryType(
+        memoryProperties,
+        vertexMemoryRequirements.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    Check(vkAllocateMemory(state.device, &vertexMemoryInfo, nullptr, &state.vertexMemory),
+          "vkAllocateMemory(vertex)");
+    Check(vkBindBufferMemory(state.device, state.vertexBuffer, state.vertexMemory, 0),
+          "vkBindBufferMemory(vertex)");
+    void* mappedVertices = nullptr;
+    Check(vkMapMemory(state.device, state.vertexMemory, 0, sizeof(triangleVertices), 0,
+                      &mappedVertices),
+          "vkMapMemory(vertex)");
+    std::memcpy(mappedVertices, triangleVertices.data(), sizeof(triangleVertices));
+    vkUnmapMemory(state.device, state.vertexMemory);
+
     state.framebuffers.reserve(state.imageViews.size());
     for (VkImageView imageView : state.imageViews) {
         VkFramebufferCreateInfo framebufferInfo =
@@ -644,6 +867,27 @@ void RunVulkan(CAMetalLayer* metalLayer, NSMutableDictionary* report) {
     renderBegin.clearValueCount = 1;
     renderBegin.pClearValues = &clearColor;
     vkCmdBeginRenderPass(commandBuffer, &renderBegin, VK_SUBPASS_CONTENTS_INLINE);
+    const VkDeviceSize vertexOffset = 0;
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, state.pipeline);
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &state.vertexBuffer, &vertexOffset);
+    OverlayPushConstants pushConstants{};
+    pushConstants.uiScale[0] = static_cast<float>(extent.width);
+    pushConstants.uiScale[1] = static_cast<float>(extent.height);
+    pushConstants.uiScale[2] = 1.0f;
+    pushConstants.uiScale[3] = 1.0f;
+    pushConstants.albedo[0] = 0.0f;
+    pushConstants.albedo[1] = 0.45f;
+    pushConstants.albedo[2] = 0.94f;
+    pushConstants.albedo[3] = 1.0f;
+    pushConstants.viewport[0] = static_cast<float>(extent.width);
+    pushConstants.viewport[1] = static_cast<float>(extent.height);
+    pushConstants.clipBounds[2] = static_cast<float>(extent.width);
+    pushConstants.clipBounds[3] = static_cast<float>(extent.height);
+    pushConstants.vertexConfig = 1;
+    vkCmdPushConstants(commandBuffer, state.pipelineLayout,
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0, sizeof(pushConstants), &pushConstants);
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
     vkCmdEndRenderPass(commandBuffer);
     Check(vkEndCommandBuffer(commandBuffer), "vkEndCommandBuffer");
 
@@ -676,8 +920,8 @@ void RunVulkan(CAMetalLayer* metalLayer, NSMutableDictionary* report) {
 
     report[@"presentation"] = @{
         @"clearFramePresented" : @YES,
-        @"triangleFramePresented" : @NO,
-        @"triangleStatus" : @"pending committed SPIR-V fixtures",
+        @"triangleFramePresented" : @YES,
+        @"triangleShaderSource" : @"pinned Vita3K overlay SPIR-V",
         @"acquireResult" : @(static_cast<int>(acquireResult)),
         @"presentResult" : @(static_cast<int>(presentResult)),
         @"deviceLostCount" : @0,
@@ -704,7 +948,7 @@ std::string RunProbe(void* presentationLayer) {
         try {
             CAMetalLayer* metalLayer = (__bridge CAMetalLayer*)presentationLayer;
             RunVulkan(metalLayer, report);
-            report[@"status"] = @"passed-clear-frame";
+            report[@"status"] = @"passed-clear-and-triangle";
         } catch (const VulkanError& error) {
             report[@"status"] = @"failed";
             report[@"error"] = String(error.what());

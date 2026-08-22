@@ -1,8 +1,8 @@
 # Distribution constraints
 
-The first performance-capable target is a development-signed or sideloaded
-arm64 IPA with a separately enabled JIT path. App Store/TestFlight distribution
-is not assumed to grant Dynarmic executable memory.
+vita3kios is permanently distributed as a user-built, development-signed or
+sideloaded arm64 IPA with a separately enabled JIT path. App Store and
+TestFlight distribution are not supported or planned product targets.
 
 All shipped native code must be statically linked or embedded and signed in an
 iOS-supported framework form. Runtime-downloaded host dylibs/plugins are not

@@ -25,7 +25,12 @@ fi
 configure_and_build() {
     VITA3KIOS_KIND=$1
     VITA3KIOS_TARGET=$2
-    VITA3KIOS_BUILD_DIR="$VITA3KIOS_ROOT/Build/DeviceProbes/$VITA3KIOS_KIND"
+    if [ "$VITA3KIOS_SIGNING" = "YES" ]; then
+        VITA3KIOS_SIGNED_ROOT=${VITA3KIOS_SIGNED_BUILD_ROOT:-${TMPDIR:-/tmp}/vita3kios-device-probes}
+        VITA3KIOS_BUILD_DIR="${VITA3KIOS_SIGNED_ROOT%/}/$VITA3KIOS_KIND"
+    else
+        VITA3KIOS_BUILD_DIR="$VITA3KIOS_ROOT/Build/DeviceProbes/$VITA3KIOS_KIND"
+    fi
     shift 2
 
     cmake --fresh -S "$VITA3KIOS_SOURCE" -B "$VITA3KIOS_BUILD_DIR" -G Xcode \
@@ -38,11 +43,19 @@ configure_and_build() {
         -DVITA3KIOS_DEVELOPMENT_TEAM="$VITA3KIOS_TEAM" \
         "$@"
 
-    cmake --build "$VITA3KIOS_BUILD_DIR" --config Release \
-        --target "$VITA3KIOS_TARGET" -- \
-        -sdk iphoneos \
-        CODE_SIGNING_ALLOWED="$VITA3KIOS_SIGNING" \
-        DEVELOPMENT_TEAM="$VITA3KIOS_TEAM"
+    if [ "$VITA3KIOS_SIGNING" = "YES" ]; then
+        cmake --build "$VITA3KIOS_BUILD_DIR" --config Release \
+            --target "$VITA3KIOS_TARGET" -- \
+            -sdk iphoneos \
+            -allowProvisioningUpdates \
+            CODE_SIGNING_ALLOWED=YES \
+            DEVELOPMENT_TEAM="$VITA3KIOS_TEAM"
+    else
+        cmake --build "$VITA3KIOS_BUILD_DIR" --config Release \
+            --target "$VITA3KIOS_TARGET" -- \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO
+    fi
 
     echo "probe_target=$VITA3KIOS_TARGET"
     echo "probe_build_dir=$VITA3KIOS_BUILD_DIR"

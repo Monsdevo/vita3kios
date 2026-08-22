@@ -4,8 +4,8 @@ An experimental, open-source PlayStation Vita emulator for iPhone and iPad,
 built by porting the Vita3K core into an Apple-native application.
 
 > [!IMPORTANT]
-> vita3kios is in early feasibility development. There is no installable IPA
-> and no playable public build yet. Do not download applications claiming to
+> vita3kios is in early feasibility development. There is no playable public
+> build yet. Do not download applications claiming to
 > be an official vita3kios release from third-party websites.
 
 ## Project status
@@ -14,15 +14,23 @@ Phase 1 and milestone M0 are complete. The pinned Vita3K source builds and
 passes its selected tests from a clean macOS arm64 checkout.
 
 Phase 2A is in progress. Independent iPhoneOS arm64 probes for Dynarmic JIT and
-MoltenVK now compile successfully, but they have not completed the signed
-physical-device runtime gates. M1 and M2 therefore remain open.
+MoltenVK compile, sign, and pass artifact inspection. The MoltenVK probe now
+presents both a clear frame and a triangle using pinned Vita3K SPIR-V. Signed
+physical-device runtime reports are still required, so M1 and M2 remain open.
+
+The first M3 product scaffold also exists. Its Apple-native SwiftUI shell links
+a versioned C ABI and a real pinned Vita3K allocator source, displays core
+version/capability diagnostics, and passes host and Simulator smoke tests. The
+signed app installs on a physical iPhone; an unlocked-device launch report is
+still required before M3 can be closed.
 
 See [ROADMAP.txt](ROADMAP.txt) for the authoritative plan, acceptance gates,
 and current progress.
 
 ## Planned features
 
-- Native SwiftUI interface designed for iPhone and iPad
+- Native SwiftUI interface designed for iPhone and iPad, with restrained
+  PlayStation-inspired accent details
 - Game and application import through the iOS document picker
 - **Direct Game Mode** for launching an installed Vita title directly
 - **System Software Mode** for booting the authentic SceShell/LiveArea
@@ -54,8 +62,8 @@ These values may change only after physical-device measurements are recorded.
 
 ## Building
 
-The repository currently provides the reproducible macOS upstream baseline and
-the Phase 2A device probes. It does not yet provide the product Xcode project.
+The repository provides the reproducible macOS upstream baseline, Phase 2A
+device probes, and a generated M3 SwiftUI product project.
 
 ```sh
 git clone --recursive https://github.com/Monsdevo/vita3kios.git
@@ -63,19 +71,24 @@ cd vita3kios
 Scripts/bootstrap.sh
 Scripts/build-device-probes.sh jit
 Scripts/build-device-probes.sh moltenvk
+Scripts/build-app.sh host
+Scripts/build-app.sh simulator
+Scripts/build-app.sh device
 ```
 
-Detailed instructions are in [Docs/BUILDING.md](Docs/BUILDING.md) and
-[Docs/DEVICE_PROBES.md](Docs/DEVICE_PROBES.md).
+Detailed instructions are in [Docs/BUILDING.md](Docs/BUILDING.md),
+[Docs/DEVICE_PROBES.md](Docs/DEVICE_PROBES.md), and
+[Docs/DEVICE_TESTING.md](Docs/DEVICE_TESTING.md).
 
 ## Installation and usage
 
-Installation instructions will be published with the first verified alpha.
-Until then, no IPA should be treated as an official vita3kios build.
+vita3kios is permanently a self-signed/sideloaded project. App Store and
+TestFlight distribution are not product targets. Verified installation
+instructions will be published with the first technical alpha; until then, no
+third-party IPA should be treated as an official build.
 
-Future releases are expected to use a sideloaded build and an explicitly
-documented JIT-enablement flow. Users will supply their own legally obtained
-firmware and dumped applications; neither is included with the project.
+Users will supply their own legally obtained firmware and dumped applications;
+neither is included with the project.
 
 ## Content and legal notice
 
