@@ -548,7 +548,8 @@ PHASE 9 — INPUT, TOUCH, MOTION, AUDIO, AND VITA FEATURES
   [ ] 9.2 Vita mapping, deadzones, ranges, and user remapping.
   [~] 9.3 Native touch overlay for analogs, d-pad, face, shoulder, Start/Select/PS.
           All listed controls submit normalized ABI v3 snapshots; runtime mapping,
-          multitouch stress testing, and customization remain pending.
+          multitouch stress testing, and customization remain pending. L/R use
+          compact shoulder capsules directly above their controller clusters.
   [ ] 9.4 Overlay scale, opacity, position, and handed landscape layouts.
   [ ] 9.5 Map front touch through render aspect and safe-area transforms.
   [ ] 9.6 Teach and configure rear-touch gestures/regions.

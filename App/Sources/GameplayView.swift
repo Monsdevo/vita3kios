@@ -139,20 +139,13 @@ private struct VitaTouchController: View {
 
     var body: some View {
         VStack {
-            HStack {
-                TouchButton(label: "L", color: .white.opacity(0.7)) {
-                    setButton(VitaInputButton.l, pressed: $0)
-                }
-                Spacer()
-                TouchButton(label: "R", color: .white.opacity(0.7)) {
-                    setButton(VitaInputButton.r, pressed: $0)
-                }
-            }
-
             Spacer()
 
             HStack(alignment: .bottom) {
-                VStack(spacing: 16) {
+                VStack(spacing: 10) {
+                    ShoulderTouchButton(label: "L") {
+                        setButton(VitaInputButton.l, pressed: $0)
+                    }
                     DPad { button, pressed in setButton(button, pressed: pressed) }
                     VirtualStick { x, y in
                         input.leftX = x
@@ -177,7 +170,10 @@ private struct VitaTouchController: View {
 
                 Spacer()
 
-                VStack(spacing: 16) {
+                VStack(spacing: 10) {
+                    ShoulderTouchButton(label: "R") {
+                        setButton(VitaInputButton.r, pressed: $0)
+                    }
                     FaceButtons { button, pressed in setButton(button, pressed: pressed) }
                     VirtualStick { x, y in
                         input.rightX = x
@@ -195,6 +191,36 @@ private struct VitaTouchController: View {
         } else {
             input.buttons &= ~button
         }
+    }
+}
+
+private struct ShoulderTouchButton: View {
+    let label: String
+    let changed: (Bool) -> Void
+    @State private var pressed = false
+
+    var body: some View {
+        Text(label)
+            .font(.caption.bold())
+            .frame(width: 72, height: 30)
+            .foregroundStyle(.white.opacity(0.8))
+            .background(.black.opacity(pressed ? 0.72 : 0.42), in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(pressed ? 0.7 : 0.3), lineWidth: 1))
+            .scaleEffect(pressed ? 0.94 : 1)
+            .contentShape(Capsule())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard !pressed else { return }
+                        pressed = true
+                        changed(true)
+                    }
+                    .onEnded { _ in
+                        pressed = false
+                        changed(false)
+                    }
+            )
+            .accessibilityLabel("\(label) Shoulder Button")
     }
 }
 
