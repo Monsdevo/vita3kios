@@ -1,7 +1,7 @@
 vita3kios — MASTER ROADMAP
-Version: 0.6
+Version: 0.7
 Created: 2026-08-22
-Status: M0 COMPLETE — M1, M2, AND M3 DEVICE EVIDENCE IN PROGRESS
+Status: M0 COMPLETE — SYSTEM SOFTWARE PREFLIGHT REACHES AUTHENTIC SELF CONTAINER
 
 ==============================================================================
 0. AUTHORITY AND CHANGE RULES
@@ -51,6 +51,11 @@ CURRENT STATUS
       allocator self-test pass host and Simulator smoke tests. Its signed arm64
       bundle installs on the recorded device.
   [ ] M1, M2, and M3 remain open until signed physical-device runtime reports pass.
+  [x] ABI v2 validates official PUP containers and inventories app-owned extracted
+      VitaFS generations using only synthetic/open fixtures in automated tests.
+  [~] System Software boot reaches the authentic SceShell SELF-container
+      checkpoint. The measured blocker is the unlinked full Vita3K runtime; no
+      guest instruction or guest-rendered firmware frame is claimed yet.
 
 ==============================================================================
 1. FIXED PRODUCT DEFINITION
@@ -281,20 +286,26 @@ Exit gate:
 PHASE 2B — CORE/GUI SEPARATION AND C ABI
 Goal: Produce a testable Vita3KCore without Qt or desktop main().
 
-  [ ] 2B.1 Audit main.cpp, interface.cpp, Android/JNI, and CMake target boundaries.
+  [x] 2B.1 Audit main.cpp, interface.cpp, Android/JNI, and CMake target boundaries.
   [ ] 2B.2 Separate required core modules from Qt/Discord/desktop/debug-only code.
-  [~] 2B.3 Add create/destroy/initialize/shutdown lifecycle. Opaque create/destroy
-           exists; full initialization and shutdown remain pending.
+  [~] 2B.3 Add create/destroy/initialize/shutdown lifecycle. Opaque lifecycle,
+           serialized firmware state, sandbox root initialization, and shutdown
+           exist; full EmuEnv initialization and shutdown remain pending.
   [~] 2B.4 Define ABI version, capability, error, callback, and value types in C.
            Version, capability, result, handle, and info types exist; callbacks
            and full value descriptors remain pending.
   [~] 2B.5 Define ownership, callback threads, string lifetime, and exception rules.
            Bootstrap ownership, string lifetime, thread safety, and exception
            containment are defined; callback threading remains pending.
-  [ ] 2B.6 Expose UI-free firmware/package install, title enumeration, boot, and stop.
-  [ ] 2B.7 Serialize core operations and safely forward progress/log callbacks.
-  [~] 2B.8 Build a macOS host harness with negative state-machine tests. Bootstrap
-           handle, invalid-argument, invalid-handle, info, and allocator tests pass.
+  [~] 2B.6 Expose UI-free firmware/package install, title enumeration, boot, and stop.
+           PUP preflight, extracted-firmware inventory, and System Software boot
+           preflight exist; PUP extraction, title enumeration, runtime boot, and
+           stop remain pending.
+  [~] 2B.7 Serialize core operations and safely forward progress/log callbacks.
+           ABI operations are serialized per handle; callbacks remain pending.
+  [~] 2B.8 Build a macOS host harness with negative state-machine tests. Bootstrap,
+           lifecycle, PUP range, firmware inventory, generation mismatch, and
+           typed raw-boot blocker tests pass; full EmuEnv paths remain pending.
   [ ] 2B.9 Prototype a CMake-exported static framework/XCFramework.
   [~] 2B.10 Prove the core target links without Qt or desktop main(). The minimal
            allocator-backed bootstrap target passes; the full core split remains.
@@ -310,10 +321,15 @@ Goal: Measure authentic firmware-shell gaps before UI completion.
   [x] 2C.1 Document pinned-upstream reality: PUP partition extraction exists;
            authentic SceShell/LiveArea boot, persistent multi-process shell, and
            shell -> title -> shell lifecycle do not.
-  [ ] 2C.2 Generalize AppLaunchRequest/app0 into InstalledGame, SystemShell, and
-          SystemApp targets without breaking Direct Game Mode.
-  [ ] 2C.3 Produce vs0/os0/sa0/pd0 inventory and shell readiness from user firmware.
-  [ ] 2C.4 Build a headless raw-load shell experiment with typed checkpoints.
+  [~] 2C.2 Generalize AppLaunchRequest/app0 into InstalledGame, SystemShell, and
+          SystemApp targets without breaking Direct Game Mode. A dedicated C ABI
+          SystemShell request exists; the upstream loader resolver remains pending.
+  [~] 2C.3 Produce vs0/os0/sa0/pd0 inventory and shell readiness from user firmware.
+          Deterministic inventory and readiness logic pass synthetic tests; local
+          user-firmware device evidence remains pending.
+  [~] 2C.4 Build a headless raw-load shell experiment with typed checkpoints.
+          The experiment reproducibly verifies the authentic SceShell container
+          and reports UPSTREAM_CORE_NOT_LINKED; guest module load is next.
   [ ] 2C.5 Emit machine-readable missing NID/sysmodule/IPC/system-event traces.
   [ ] 2C.6 Split SceShellSvc, SceAppMgr, registry, IPMI/shared framebuffer, and
           process-model gaps into owned subphases.
@@ -327,7 +343,10 @@ Goal: Produce a real iOS arm64 core binary and classify every blocker.
 
   [x] 3.1 Create an iOS arm64 CMake generation path; provisional target iOS 17.4.
   [x] 3.2 Compile the smallest Bridge+Core target for iphoneos first.
-  [ ] 3.3 Classify each dependency as native, small-patch, desktop-only, or replace.
+  [~] 3.3 Classify each dependency as native, small-patch, desktop-only, or replace.
+          The full-core launch and PUP installer boundaries are recorded in
+          Docs/Audits/IOS_FULL_CORE_BOUNDARY.md; per-dependency iPhoneOS build
+          evidence remains pending.
   [ ] 3.4 Adapt signals, mmap/mprotect, locks, sockets, threads, locale, env, paths.
   [ ] 3.5 Define Application Support, Caches, Logs, Imports/Staging, and Backups.
   [ ] 3.6 Persist relative identities, never absolute container paths.
@@ -385,18 +404,25 @@ Exit gate:
 PHASE 6 — VFS, FIRMWARE, AND SAFE IMPORT
 
   [ ] 6.1 Show firmware, JIT, and storage readiness during onboarding.
-  [ ] 6.2 Implement document picker and security-scoped URL lifetime.
+  [~] 6.2 Implement document picker and security-scoped URL lifetime. Official PUP
+          and extracted VitaFS pickers use bounded security-scoped access.
   [ ] 6.3 Define supported VPK/ZIP/folder/PKG/firmware formats from measured support.
-  [ ] 6.4 Copy imports to staging; do not retain provider URLs as permanent storage.
+  [~] 6.4 Copy imports to staging; do not retain provider URLs as permanent storage.
+          Extracted VitaFS uses app-owned staging and generation promotion; game
+          and PUP extraction transactions remain pending.
   [ ] 6.5 Preflight signature/type, size, free space, param.sfo, title ID, and conflicts.
   [ ] 6.6 Defend extraction against traversal, symlinks, bombs, and cancellation.
-  [ ] 6.7 Use staging -> validation -> atomic move; clean failure and cancellation.
+  [~] 6.7 Use staging -> validation -> atomic move; clean failure and cancellation.
+          Extracted VitaFS implements staging, validation, promotion, and failure
+          cleanup; cancellation and other content types remain pending.
   [ ] 6.8 Define reinstall/update/DLC confirmation and rollback.
   [ ] 6.9 Provide non-blocking phase/progress/cancel and typed errors.
   [ ] 6.10 State clearly that firmware, games, and keys are not bundled.
   [ ] 6.11 Report storage by games, firmware, saves, cache, logs, and staging.
   [ ] 6.12 Implement atomic save backup import/export; preserve saves by default.
-  [ ] 6.13 Inventory firmware version, modules, fonts, partitions, and readiness.
+  [~] 6.13 Inventory firmware version, modules, fonts, partitions, and readiness.
+           Version, partitions, boot modules, shell path, file count, size, and
+           readiness exist; complete module/font inventories remain pending.
   [ ] 6.14 Snapshot and recover system partitions before firmware updates.
 
 Exit gate:
@@ -757,3 +783,16 @@ remain informed by probe evidence.
   - Passed Simulator UI/core-report smoke and installed the signed product on a
     physical iPhone; the device was locked, so M1–M3 runtime gates remain open.
   - Added local device-gate automation and strict JSON evidence validation.
+
+2026-08-22 — v0.7
+  - Added ABI v2 lifecycle, official PUP structural validation, deterministic
+    firmware partition inventory, immutable generation identity, and authentic
+    SceShell/boot-module readiness checks.
+  - Added an Apple-native firmware import and System Software preflight UI with
+    app-owned staging, generation restoration, typed checkpoints, and a redacted
+    device report.
+  - Passed expanded host tests plus Simulator and unsigned iPhoneOS builds.
+  - Recorded the exact current raw-boot boundary: the SceShell SELF container is
+    verified, while the full Vita3K loader/HLE/renderer runtime is not yet linked.
+  - Isolated that blocker behind a private runtime seam and documented the
+    ordered Qt-free core and PUP dependency integration slices.

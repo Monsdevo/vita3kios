@@ -1,5 +1,9 @@
 # Testing
 
+The firmware transaction and System Software raw-boot preflight are documented
+in [FIRMWARE_BOOTSTRAP.md](FIRMWARE_BOOTSTRAP.md). Automated tests use only
+synthetic content; they do not establish firmware compatibility.
+
 Every result must record both the vita3kios commit and pinned Vita3K commit,
 toolchain, build configuration and—when relevant—device model and iOS version.
 

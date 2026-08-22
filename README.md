@@ -24,6 +24,14 @@ version/capability diagnostics, and passes host and Simulator smoke tests. The
 signed app installs on a physical iPhone; an unlocked-device launch report is
 still required before M3 can be closed.
 
+ABI v2 now adds official PUP structural validation, app-owned extracted VitaFS
+generations, firmware partition inventory, and a typed System Software boot
+preflight. Synthetic tests reach the authentic `sce_shell.self` container. The
+full Vita3K loader/HLE/renderer graph is not linked into the iOS target yet, so
+no guest firmware instruction or interactive LiveArea frame is claimed. See
+[Docs/FIRMWARE_BOOTSTRAP.md](Docs/FIRMWARE_BOOTSTRAP.md) for the exact checkpoint,
+current blocker, and device test flow.
+
 See [ROADMAP.txt](ROADMAP.txt) for the authoritative plan, acceptance gates,
 and current progress.
 
@@ -78,7 +86,8 @@ Scripts/build-app.sh device
 
 Detailed instructions are in [Docs/BUILDING.md](Docs/BUILDING.md),
 [Docs/DEVICE_PROBES.md](Docs/DEVICE_PROBES.md), and
-[Docs/DEVICE_TESTING.md](Docs/DEVICE_TESTING.md).
+[Docs/DEVICE_TESTING.md](Docs/DEVICE_TESTING.md). Firmware bootstrap testing is
+covered separately in [Docs/FIRMWARE_BOOTSTRAP.md](Docs/FIRMWARE_BOOTSTRAP.md).
 
 ## Installation and usage
 

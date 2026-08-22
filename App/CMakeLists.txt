@@ -34,12 +34,14 @@ endif()
 
 add_library(Vita3KCore STATIC
     Core/src/core.cpp
+    Core/src/runtime_stub.cpp
     "${VITA3KIOS_UPSTREAM_ROOT}/vita3k/mem/src/allocator.cpp"
 )
 set_target_properties(Vita3KCore PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
+    XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++20"
 )
 target_include_directories(Vita3KCore
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Core/include"

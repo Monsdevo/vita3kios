@@ -12,6 +12,14 @@ struct SettingsView: View {
                     Label("System Software", systemImage: "rectangle.inset.filled")
                 }
 
+                Section("Firmware") {
+                    LabeledContent("Version", value: core.firmwareVersion)
+                    LabeledContent("SceShell", value: core.firmwareReady ? "Ready for preflight" : "Not ready")
+                    LabeledContent("PUP validation", value: availability(CoreCapability.firmwarePUPPreflight))
+                    LabeledContent("Partition inventory", value: availability(CoreCapability.firmwareInventory))
+                    LabeledContent("Shell preflight", value: availability(CoreCapability.systemShellPreflight))
+                }
+
                 Section("Core") {
                     LabeledContent("ABI version", value: "\(core.abiVersion)")
                     LabeledContent("Architecture", value: core.platform)
