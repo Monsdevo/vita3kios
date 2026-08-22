@@ -24,7 +24,16 @@ version/capability diagnostics, and passes host and Simulator smoke tests. The
 signed app installs on a physical iPhone; an unlocked-device launch report is
 still required before M3 can be closed.
 
-ABI v2 now adds official PUP structural validation, app-owned extracted VitaFS
+ABI v3 adds safe extracted-game inventory and import, bounded `param.sfo`
+metadata parsing, authentic `eboot.bin` SELF preflight, typed Direct Game boot
+checkpoints, input state, and validity-tagged performance snapshots. The native
+gameplay surface owns a `CAMetalLayer`, attaches its drawable to ABI v3 before
+boot, and includes a Vita touch-controller overlay plus compact top-left HUD.
+The full Vita3K loader/Dynarmic/renderer graph is not yet
+linked, so imported games are not playable yet. See
+[Docs/DIRECT_GAME_BOOTSTRAP.md](Docs/DIRECT_GAME_BOOTSTRAP.md).
+
+The same ABI retains official PUP structural validation, app-owned extracted VitaFS
 generations, firmware partition inventory, and a typed System Software boot
 preflight. Synthetic tests reach the authentic `sce_shell.self` container. The
 full Vita3K loader/HLE/renderer graph is not linked into the iOS target yet, so
@@ -45,7 +54,7 @@ and current progress.
   environment from user-supplied official firmware
 - Detailed global, boot-mode, and per-title settings profiles
 - Searchable Basic, Advanced, and Developer settings views
-- Small, configurable top-right performance HUD in both boot modes
+- Small, configurable top-left performance HUD in both boot modes
 - Physical controllers, touch controls, front/rear touch, motion, and audio
 - Vulkan rendering through MoltenVK and `CAMetalLayer`
 - Dynarmic A32-to-A64 JIT with an explicitly verified iOS JIT workflow
@@ -87,7 +96,9 @@ Scripts/build-app.sh device
 Detailed instructions are in [Docs/BUILDING.md](Docs/BUILDING.md),
 [Docs/DEVICE_PROBES.md](Docs/DEVICE_PROBES.md), and
 [Docs/DEVICE_TESTING.md](Docs/DEVICE_TESTING.md). Firmware bootstrap testing is
-covered separately in [Docs/FIRMWARE_BOOTSTRAP.md](Docs/FIRMWARE_BOOTSTRAP.md).
+covered separately in [Docs/FIRMWARE_BOOTSTRAP.md](Docs/FIRMWARE_BOOTSTRAP.md),
+and the current Direct Game gate is in
+[Docs/DIRECT_GAME_BOOTSTRAP.md](Docs/DIRECT_GAME_BOOTSTRAP.md).
 
 ## Installation and usage
 

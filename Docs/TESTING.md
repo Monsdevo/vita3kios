@@ -4,6 +4,10 @@ The firmware transaction and System Software raw-boot preflight are documented
 in [FIRMWARE_BOOTSTRAP.md](FIRMWARE_BOOTSTRAP.md). Automated tests use only
 synthetic content; they do not establish firmware compatibility.
 
+The extracted-game transaction, Direct Game preflight, gameplay surface, touch
+controller, and top-left HUD gate are documented in
+[DIRECT_GAME_BOOTSTRAP.md](DIRECT_GAME_BOOTSTRAP.md).
+
 Every result must record both the vita3kios commit and pinned Vita3K commit,
 toolchain, build configuration and—when relevant—device model and iOS version.
 

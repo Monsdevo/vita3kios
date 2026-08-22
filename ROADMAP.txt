@@ -1,7 +1,7 @@
 vita3kios — MASTER ROADMAP
-Version: 0.7
+Version: 0.8
 Created: 2026-08-22
-Status: M0 COMPLETE — SYSTEM SOFTWARE PREFLIGHT REACHES AUTHENTIC SELF CONTAINER
+Status: M0 COMPLETE — DIRECT GAME MODE IS THE PRIMARY ACTIVE DELIVERY PATH
 
 ==============================================================================
 0. AUTHORITY AND CHANGE RULES
@@ -51,11 +51,15 @@ CURRENT STATUS
       allocator self-test pass host and Simulator smoke tests. Its signed arm64
       bundle installs on the recorded device.
   [ ] M1, M2, and M3 remain open until signed physical-device runtime reports pass.
-  [x] ABI v2 validates official PUP containers and inventories app-owned extracted
-      VitaFS generations using only synthetic/open fixtures in automated tests.
+  [x] ABI v3 validates official PUP containers and inventories app-owned extracted
+      VitaFS and game generations using only synthetic/open fixtures in automated
+      tests. Direct Game reaches a verified eboot SELF container.
   [~] System Software boot reaches the authentic SceShell SELF-container
       checkpoint. The measured blocker is the unlinked full Vita3K runtime; no
       guest instruction or guest-rendered firmware frame is claimed yet.
+  [~] Direct Game Mode is the primary implementation path until a user-supplied
+      game boots visibly and repeatably on a physical iPhone. Authentic System
+      Software remains a later research path and must not block Direct Game.
 
 ==============================================================================
 1. FIXED PRODUCT DEFINITION
@@ -85,7 +89,7 @@ Core product:
   - Settings are not a simple toggle page. Support global, Direct Game, System
     Software, and title profiles; Basic/Advanced/Developer views; search,
     explanations, reset, validation, and safe migration.
-  - Both boot modes show a small readable top-right performance HUD by default.
+  - Both boot modes show a small readable top-left performance HUD by default.
     The HUD is configurable and may be disabled; Compact is the default preset.
 
 Initial distribution target:
@@ -384,13 +388,15 @@ Exit gate:
 
 PHASE 5 — GRAPHICS: CAMetalLayer AND MOLTENVK
 
-  [ ] 5.1 Add a UIKit/MetalKit CAMetalLayer owner inside SwiftUI.
+  [~] 5.1 Add a UIKit/MetalKit CAMetalLayer owner inside SwiftUI. The native owner
+          and ABI attachment exist; the Vita3K renderer connection remains pending.
   [ ] 5.2 Create an iOS DisplayHandle and VK_EXT_metal_surface.
   [ ] 5.3 Audit MoltenVK device arm64 linkage, licenses, and signing.
   [ ] 5.4 Present clear/triangle frames; test resize, rotation, scale, and lifecycle.
   [ ] 5.5 Preserve portability enumeration, image swizzle, and fragment correctness.
   [ ] 5.6 Recover from surface loss, background, lock, and scene reconnection.
-  [ ] 5.7 Default to aspect-fit 960x544; offer integer/stretch only deliberately.
+  [~] 5.7 Default to aspect-fit 960x544; offer integer/stretch only deliberately.
+          The Direct Game surface defaults to aspect-fit; options remain pending.
   [ ] 5.8 Diagnose initial GXM shader/frame failures with capture and validation.
   [ ] 5.9 Version shader/pipeline cache under Caches and allow safe clearing.
   [?] 5.10 Keep MoltenVK unless measured correctness/performance blocks it; create a
@@ -406,18 +412,24 @@ PHASE 6 — VFS, FIRMWARE, AND SAFE IMPORT
   [ ] 6.1 Show firmware, JIT, and storage readiness during onboarding.
   [~] 6.2 Implement document picker and security-scoped URL lifetime. Official PUP
           and extracted VitaFS pickers use bounded security-scoped access.
-  [ ] 6.3 Define supported VPK/ZIP/folder/PKG/firmware formats from measured support.
+  [~] 6.3 Define supported VPK/ZIP/folder/PKG/firmware formats from measured support.
+          Extracted game folders are the first supported game input; archives,
+          packages, updates, and DLC remain pending.
   [~] 6.4 Copy imports to staging; do not retain provider URLs as permanent storage.
-          Extracted VitaFS uses app-owned staging and generation promotion; game
-          and PUP extraction transactions remain pending.
-  [ ] 6.5 Preflight signature/type, size, free space, param.sfo, title ID, and conflicts.
-  [ ] 6.6 Defend extraction against traversal, symlinks, bombs, and cancellation.
+          Extracted VitaFS and game folders use app-owned staging and generation
+          promotion; PUP/package extraction transactions remain pending.
+  [~] 6.5 Preflight signature/type, size, free space, param.sfo, title ID, and conflicts.
+          Extracted games have bounded SFO/title/SELF validation and size inventory;
+          signature, free-space, and conflict policy remain pending.
+  [~] 6.6 Defend extraction against traversal, symlinks, bombs, and cancellation.
+          Folder inventory rejects symlinks and excessive entry counts; archive
+          extraction defenses and cancellation remain pending.
   [~] 6.7 Use staging -> validation -> atomic move; clean failure and cancellation.
-          Extracted VitaFS implements staging, validation, promotion, and failure
-          cleanup; cancellation and other content types remain pending.
+          Extracted VitaFS and games implement staging, validation, promotion, and
+          failure cleanup; cancellation and other content types remain pending.
   [ ] 6.8 Define reinstall/update/DLC confirmation and rollback.
   [ ] 6.9 Provide non-blocking phase/progress/cancel and typed errors.
-  [ ] 6.10 State clearly that firmware, games, and keys are not bundled.
+  [x] 6.10 State clearly that firmware, games, and keys are not bundled.
   [ ] 6.11 Report storage by games, firmware, saves, cache, logs, and staging.
   [ ] 6.12 Implement atomic save backup import/export; preserve saves by default.
   [~] 6.13 Inventory firmware version, modules, fonts, partitions, and readiness.
@@ -431,9 +443,12 @@ Exit gate:
 
 PHASE 7 — NATIVE LIBRARY AND SETTINGS UI
 
-  [ ] 7.1 NavigationStack on iPhone and NavigationSplitView on iPad.
-  [ ] 7.2 Empty state with Import plus firmware/JIT readiness cards.
-  [ ] 7.3 Grid/list with icon, name, title ID, version, and last result.
+  [~] 7.1 NavigationStack on iPhone and NavigationSplitView on iPad. NavigationStack
+          is active; the iPad split layout remains pending.
+  [~] 7.2 Empty state with Import plus firmware/JIT readiness cards. The native
+          empty state and readiness cards exist; readiness probes remain incomplete.
+  [~] 7.3 Grid/list with icon, name, title ID, version, and last result. Imported
+          games show metadata, icon, size, and Play; last-result persistence remains.
   [ ] 7.4 Search, sorting, and filters.
   [ ] 7.5 Detail page: Play, info, storage, settings, logs, updates/DLC, delete.
   [ ] 7.6 Deterministic built-in -> global -> mode -> title -> session precedence.
@@ -444,7 +459,8 @@ PHASE 7 — NATIVE LIBRARY AND SETTINGS UI
   [ ] 7.9 Drive every setting from bridge capability, range, default, and support.
   [ ] 7.10 Version and safely migrate invalid/old configuration.
   [ ] 7.11 Keep a separate System Software profile with correctness warnings.
-  [ ] 7.12 Non-blocking import and firmware sheets.
+  [~] 7.12 Non-blocking import and firmware sheets. Folder copies and inventories
+           run off the main actor; progress and cancellation remain pending.
   [ ] 7.13 Present technical code, user explanation, recovery, and log sharing.
   [ ] 7.14 Validate Dynamic Type, VoiceOver, Reduce Motion, contrast, keyboard,
           pointer, and controller navigation.
@@ -459,36 +475,46 @@ Exit gate:
 
 PHASE 7A — PERFORMANCE HUD AND LIVE DIAGNOSTICS
 
-  [ ] 7A.1 Add a lock-free or low-contention metric snapshot API.
-  [ ] 7A.2 Compact default: guest FPS and real frame interval.
+  [~] 7A.1 Add a lock-free or low-contention metric snapshot API. ABI v3 exposes a
+           validity-tagged snapshot; live runtime counters remain pending.
+  [~] 7A.2 Compact default: guest FPS and real frame interval. The compact surface
+           exists and shows unavailable values honestly until the runtime publishes.
   [ ] 7A.3 Standard: guest/present FPS, rolling average, and 1% low. Detailed and
            Custom add only supported CPU/GPU/JIT/memory/thermal/audio data.
-  [ ] 7A.4 Render at topTrailing with safe-area padding, small monospaced digits,
+  [x] 7A.4 Render at topLeading with safe-area padding, small monospaced digits,
            high contrast, and no input interception.
   [ ] 7A.5 Off/Compact/Standard/Detailed/Custom, opacity, scale, interval, metrics.
-  [ ] 7A.6 Default 2–4 Hz UI refresh; never block render threads.
+  [~] 7A.6 Default 2–4 Hz UI refresh; never block render threads. Direct Game polls
+           at 4 Hz; physical-device overhead measurement remains pending.
   [ ] 7A.7 Use one HUD implementation for Direct Game and System Software.
   [ ] 7A.8 Offer screenshot/recording inclusion only where technically controllable.
   [ ] 7A.9 Measure Off/Compact overhead; target <=1% CPU and no meaningful p95 loss.
-  [ ] 7A.10 Use validity bits; never invent unsupported CPU/GPU/speed values. Show
-            the first valid HUD sample within one second after session data begins.
+  [~] 7A.10 Use validity bits; never invent unsupported CPU/GPU/speed values. The
+            contract and unavailable-state rendering exist; the first live sample
+            depends on the full runtime.
 
 Exit gate:
-  [ ] Top-right Compact HUD is readable and accurate in both boot modes.
+  [ ] Top-left Compact HUD is readable and accurate in both boot modes.
   [ ] Counters match core/Instruments evidence within documented tolerance.
   [ ] MHUD complete.
 
 PHASE 8 — BOOT, SESSION LIFECYCLE, AND FIRST HOMEBREW
 
   [ ] 8.1 Select small redistributable homebrew or document hash/acquisition only.
-  [ ] 8.2 Reach loader/kernel checkpoint through the smallest no-firmware path.
-  [ ] 8.3 Verify CPU, renderer, audio, and UI thread ownership.
+  [~] 8.2 Reach loader/kernel checkpoint through the smallest no-firmware path.
+          Direct Game reaches an authenticated eboot container; the loader is next.
+  [~] 8.3 Verify CPU, renderer, audio, and UI thread ownership. ABI seams and a
+          native CAMetalLayer owner exist; runtime thread ownership remains pending.
   [ ] 8.4 Present the first frame and measure shader compilation.
   [ ] 8.5 Pause overlay: Resume, Restart, Settings, Controls, Stop.
   [ ] 8.6 Stop all resources within a deadline and support a second boot.
   [ ] 8.7 Pause on interruption/background/lock and resume safely.
-  [ ] 8.8 Return to library with diagnostics after boot failure.
+  [~] 8.8 Return to library with diagnostics after boot failure. Typed checkpoints,
+          blockers, a close path, and a redacted report exist; recovery UX remains.
   [ ] 8.9 Pass 20 boot/stop cycles and a two-hour homebrew soak.
+  [~] 8.10 Present the native Vita touch controller overlay whenever a Direct Game
+           session is visible; the full control set is present, while physical
+           controller discovery and the user-controlled hiding policy remain pending.
 
 Exit gate:
   [ ] Homebrew boots visibly and repeatably.
@@ -520,7 +546,9 @@ PHASE 9 — INPUT, TOUCH, MOTION, AUDIO, AND VITA FEATURES
 
   [ ] 9.1 GameController discovery and hot-plug for common controllers.
   [ ] 9.2 Vita mapping, deadzones, ranges, and user remapping.
-  [ ] 9.3 Native touch overlay for analogs, d-pad, face, shoulder, Start/Select/PS.
+  [~] 9.3 Native touch overlay for analogs, d-pad, face, shoulder, Start/Select/PS.
+          All listed controls submit normalized ABI v3 snapshots; runtime mapping,
+          multitouch stress testing, and customization remain pending.
   [ ] 9.4 Overlay scale, opacity, position, and handed landscape layouts.
   [ ] 9.5 Map front touch through render aspect and safe-area transforms.
   [ ] 9.6 Teach and configure rear-touch gestures/regions.
@@ -592,7 +620,9 @@ PHASE 13 — ALPHA UX, POLISH, AND ACCESSIBILITY
   [~] 13.1 Apple-native design system using system colors, materials, and SF Symbols.
            The M3 scaffold establishes the base language with restrained
            PlayStation-inspired accent details; full component coverage is pending.
-  [ ] 13.2 iPhone portrait library and controlled gameplay orientation.
+  [~] 13.2 iPhone portrait library and controlled gameplay orientation. Direct Game
+           requests landscape through UIWindowScene and returns to portrait on exit;
+           rotation/lifecycle stress testing remains pending.
   [ ] 13.3 iPad pointer/keyboard/controller focus and multiwindow decision.
   [ ] 13.4 Non-blocking progress and cancellation for import/boot.
   [ ] 13.5 Clear firmware/JIT/controller/storage readiness.
@@ -796,3 +826,14 @@ remain informed by probe evidence.
     verified, while the full Vita3K loader/HLE/renderer runtime is not yet linked.
   - Isolated that blocker behind a private runtime seam and documented the
     ordered Qt-free core and PUP dependency integration slices.
+
+2026-08-22 — v0.8
+  - Made Direct Game Mode the primary delivery path until physical-device game
+    boot is proven; System Software remains the subsequent research path.
+  - Moved the compact performance HUD requirement to the top-left corner.
+  - Required a native Vita touch controller overlay whenever a Direct Game
+    session is visible, with physical-controller hiding controlled by the user.
+  - Added ABI v3 extracted-game inventory, bounded SFO and eboot preflight,
+    app-owned atomic imports, a native library, Direct Game checkpoints, a
+    CAMetalLayer gameplay surface with pre-boot ABI attachment, the full Vita
+    touch-control set, and a validity-tagged top-left performance HUD.

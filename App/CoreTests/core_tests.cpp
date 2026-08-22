@@ -1,5 +1,6 @@
 #include <vita3kios/core.h>
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <chrono>
@@ -81,6 +82,57 @@ filesystem::path MakeSyntheticVitaFs(const filesystem::path& root) {
     return vita;
 }
 
+filesystem::path MakeSyntheticGame(const filesystem::path& root) {
+    const auto game = root / "Games/Generations/synthetic-game";
+    const std::array<std::pair<std::string, std::string>, 5> fields{{
+        {"TITLE_ID", "TEST00001"},
+        {"TITLE", "Synthetic Vita Homebrew"},
+        {"APP_VER", "01.00"},
+        {"CATEGORY", "gd"},
+        {"CONTENT_ID", "TEST-CONTENT-ID"},
+    }};
+    constexpr std::size_t headerSize = 0x14;
+    constexpr std::size_t entrySize = 0x10;
+    std::string keys;
+    std::string values;
+    std::array<std::uint16_t, fields.size()> keyOffsets{};
+    std::array<std::uint32_t, fields.size()> valueOffsets{};
+    for (std::size_t index = 0; index < fields.size(); ++index) {
+        keyOffsets[index] = static_cast<std::uint16_t>(keys.size());
+        valueOffsets[index] = static_cast<std::uint32_t>(values.size());
+        keys += fields[index].first;
+        keys.push_back('\0');
+        values += fields[index].second;
+        values.push_back('\0');
+    }
+    const std::size_t keyTable = headerSize + entrySize * fields.size();
+    const std::size_t dataTable = (keyTable + keys.size() + 3U) & ~3U;
+    std::vector<unsigned char> sfo(dataTable + values.size(), 0);
+    sfo[0] = 0;
+    sfo[1] = 'P';
+    sfo[2] = 'S';
+    sfo[3] = 'F';
+    WriteLittleEndian<std::uint32_t>(sfo, 0x04, 0x00000101);
+    WriteLittleEndian<std::uint32_t>(sfo, 0x08, keyTable);
+    WriteLittleEndian<std::uint32_t>(sfo, 0x0c, dataTable);
+    WriteLittleEndian<std::uint32_t>(sfo, 0x10, fields.size());
+    for (std::size_t index = 0; index < fields.size(); ++index) {
+        const std::size_t entry = headerSize + entrySize * index;
+        const auto length = static_cast<std::uint32_t>(fields[index].second.size() + 1);
+        WriteLittleEndian<std::uint16_t>(sfo, entry, keyOffsets[index]);
+        WriteLittleEndian<std::uint16_t>(sfo, entry + 2, 0x0204);
+        WriteLittleEndian<std::uint32_t>(sfo, entry + 4, length);
+        WriteLittleEndian<std::uint32_t>(sfo, entry + 8, length);
+        WriteLittleEndian<std::uint32_t>(sfo, entry + 12, valueOffsets[index]);
+    }
+    std::copy(keys.begin(), keys.end(), sfo.begin() + static_cast<std::ptrdiff_t>(keyTable));
+    std::copy(values.begin(), values.end(), sfo.begin() + static_cast<std::ptrdiff_t>(dataTable));
+    WriteFile(game / "sce_sys/param.sfo", sfo);
+    WriteFile(game / "sce_sys/icon0.png", {0x89, 'P', 'N', 'G'});
+    WriteFile(game / "eboot.bin", {'S', 'C', 'E', 0, 1, 2, 3, 4});
+    return game;
+}
+
 }  // namespace
 
 int main() {
@@ -95,6 +147,9 @@ int main() {
     assert(info.abi_version == VITA3KIOS_CORE_ABI_VERSION);
     assert((info.capabilities & V3KIOS_CAPABILITY_UPSTREAM_ALLOCATOR) != 0);
     assert((info.capabilities & V3KIOS_CAPABILITY_FIRMWARE_INVENTORY) != 0);
+    assert((info.capabilities & V3KIOS_CAPABILITY_GAME_INVENTORY) != 0);
+    assert((info.capabilities & V3KIOS_CAPABILITY_DIRECT_GAME_PREFLIGHT) != 0);
+    assert((info.capabilities & V3KIOS_CAPABILITY_DIRECT_GAME) == 0);
     assert((info.capabilities & V3KIOS_CAPABILITY_SYSTEM_SOFTWARE) == 0);
     assert(v3kios_core_run_bootstrap_self_test(handle) == V3KIOS_RESULT_OK);
 
@@ -105,6 +160,7 @@ int main() {
 
     const auto fixtureRoot = MakeFixtureRoot();
     const auto vitaRoot = MakeSyntheticVitaFs(fixtureRoot);
+    const auto gameRoot = MakeSyntheticGame(fixtureRoot / "data");
     assert(v3kios_core_initialize(handle, (fixtureRoot / "data").c_str()) == V3KIOS_RESULT_OK);
     assert(v3kios_core_initialize(handle, (fixtureRoot / "data").c_str()) ==
            V3KIOS_RESULT_INVALID_STATE);
@@ -143,6 +199,57 @@ int main() {
            V3KIOS_RESULT_UNSUPPORTED);
     assert(bootReport.checkpoint == V3KIOS_BOOT_CHECKPOINT_SHELL_CONTAINER_VERIFIED);
     assert(bootReport.blocker == V3KIOS_BOOT_BLOCKER_UPSTREAM_CORE_NOT_LINKED);
+
+    v3kios_game_info_v1 gameInfo{};
+    gameInfo.struct_size = sizeof(gameInfo);
+    assert(v3kios_core_inventory_game(handle, gameRoot.c_str(), &gameInfo) ==
+           V3KIOS_RESULT_OK);
+    assert(gameInfo.state == V3KIOS_GAME_BOOT_READY);
+    assert(std::string{gameInfo.title_id} == "TEST00001");
+    assert(std::string{gameInfo.title} == "Synthetic Vita Homebrew");
+    assert(std::string{gameInfo.eboot_relative_path} == "eboot.bin");
+    const std::string gameGeneration{gameInfo.generation_id};
+
+    v3kios_direct_boot_report_v1 directReport{};
+    directReport.struct_size = sizeof(directReport);
+    assert(v3kios_core_boot_direct_game(handle, (fixtureRoot / "missing-game").c_str(),
+                                        "missing", &directReport) ==
+           V3KIOS_RESULT_GAME_NOT_READY);
+    assert(directReport.blocker == V3KIOS_DIRECT_BOOT_BLOCKER_GAME_NOT_SELECTED);
+    assert(v3kios_core_boot_direct_game(handle, gameRoot.c_str(), "wrong", &directReport) ==
+           V3KIOS_RESULT_INVALID_GAME);
+    assert(directReport.blocker == V3KIOS_DIRECT_BOOT_BLOCKER_GENERATION_MISMATCH);
+    assert(v3kios_core_boot_direct_game(handle, gameRoot.c_str(), gameGeneration.c_str(),
+                                        &directReport) == V3KIOS_RESULT_GAME_NOT_READY);
+    assert(directReport.checkpoint == V3KIOS_DIRECT_BOOT_CHECKPOINT_EBOOT_CONTAINER_VERIFIED);
+    assert(directReport.blocker == V3KIOS_DIRECT_BOOT_BLOCKER_DISPLAY_SURFACE_MISSING);
+    v3kios_display_surface_v1 display{};
+    display.struct_size = sizeof(display);
+    display.metal_layer = reinterpret_cast<void*>(static_cast<std::uintptr_t>(1));
+    display.drawable_width = 1920;
+    display.drawable_height = 1088;
+    display.scale = 2.0F;
+    assert(v3kios_core_attach_display_surface(handle, &display) == V3KIOS_RESULT_OK);
+    assert(v3kios_core_boot_direct_game(handle, gameRoot.c_str(), gameGeneration.c_str(),
+                                        &directReport) == V3KIOS_RESULT_UNSUPPORTED);
+    assert(directReport.checkpoint == V3KIOS_DIRECT_BOOT_CHECKPOINT_EBOOT_CONTAINER_VERIFIED);
+    assert(directReport.blocker == V3KIOS_DIRECT_BOOT_BLOCKER_UPSTREAM_CORE_NOT_LINKED);
+
+    v3kios_input_state_v1 input{};
+    input.struct_size = sizeof(input);
+    input.left_x = 2.0F;
+    assert(v3kios_core_set_input_state(handle, &input) == V3KIOS_RESULT_INVALID_ARGUMENT);
+    input.left_x = 0.5F;
+    input.buttons = 1U << 31;
+    assert(v3kios_core_set_input_state(handle, &input) == V3KIOS_RESULT_INVALID_ARGUMENT);
+    input.buttons = V3KIOS_INPUT_L | V3KIOS_INPUT_CROSS | V3KIOS_INPUT_PS;
+    assert(v3kios_core_set_input_state(handle, &input) == V3KIOS_RESULT_OK);
+    v3kios_metrics_v1 metrics{};
+    metrics.struct_size = sizeof(metrics);
+    assert(v3kios_core_get_metrics(handle, &metrics) == V3KIOS_RESULT_OK);
+    assert(metrics.validity_mask == 0);
+    assert(v3kios_core_stop_session(handle) == V3KIOS_RESULT_INVALID_STATE);
+    assert(v3kios_core_detach_display_surface(handle) == V3KIOS_RESULT_OK);
 
     assert(v3kios_core_shutdown(handle) == V3KIOS_RESULT_OK);
     assert(v3kios_core_shutdown(handle) == V3KIOS_RESULT_INVALID_STATE);

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import QuartzCore
 
 private final class CoreHandleStorage {
     var value: v3kios_core_handle_t = 0
@@ -34,6 +35,14 @@ final class CoreStatusModel {
     private(set) var firmwareBytes: UInt64 = 0
     private(set) var shellPath = ""
     private(set) var firmwareDetail = "Import an official firmware PUP for validation or an extracted VitaFS for the current boot experiment."
+    private(set) var games: [GameLibraryItem] = []
+    private(set) var gameImportBusy = false
+    private(set) var gameLibraryBusy = false
+    private(set) var activeGame: GameLibraryItem?
+    private(set) var directBootCheckpoint = "Not started"
+    private(set) var directBootBlocker = "No boot attempt"
+    private(set) var directBootDetail = ""
+    private(set) var metrics = PerformanceMetrics()
     private(set) var bootCheckpoint = "Not started"
     private(set) var bootBlocker = "No boot attempt"
     private(set) var bootDetail = ""
@@ -70,6 +79,7 @@ final class CoreStatusModel {
         allocatorTestPassed = v3kios_core_run_bootstrap_self_test(core.value).rawValue == 0
         initializeIfNeeded()
         restoreFirmwareIfPresent()
+        restoreGames()
         writeReadinessReport()
     }
 
@@ -130,6 +140,125 @@ final class CoreStatusModel {
             }
             firmwareBusy = false
         }
+    }
+
+    func importExtractedGame(_ url: URL) {
+        guard core.value != 0 else { return }
+        gameImportBusy = true
+        error = nil
+        do {
+            let supportRoot = try Self.applicationSupportRoot()
+            let coreHandle = core.value
+            Task {
+                do {
+                    let item = try await Task.detached(priority: .userInitiated) {
+                        try Self.copyAndInventoryGame(
+                            source: url,
+                            supportRoot: supportRoot,
+                            handle: coreHandle
+                        )
+                    }.value
+                    games.removeAll { $0.generation == item.generation }
+                    games.append(item)
+                    games.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+                } catch {
+                    self.error = error.localizedDescription
+                }
+                gameImportBusy = false
+            }
+        } catch {
+            self.error = error.localizedDescription
+            gameImportBusy = false
+        }
+    }
+
+    func bootDirectGame(_ game: GameLibraryItem) {
+        guard let container = gameContainerURL(for: game) else {
+            error = "The imported game container is unavailable."
+            return
+        }
+        var report = v3kios_direct_boot_report_v1()
+        report.struct_size = UInt32(MemoryLayout<v3kios_direct_boot_report_v1>.size)
+        let result = container.path.withCString { root in
+            game.generation.withCString { generation in
+                v3kios_core_boot_direct_game(core.value, root, generation, &report)
+            }
+        }
+        directBootCheckpoint = string(v3kios_direct_boot_checkpoint_description(report.checkpoint))
+        directBootBlocker = string(v3kios_direct_boot_blocker_description(report.blocker))
+        directBootDetail = string(report.detail)
+        activeGame = game
+        if result.rawValue != 0 && result != V3KIOS_RESULT_UNSUPPORTED {
+            error = description(for: result)
+        } else {
+            error = nil
+        }
+        writeDirectGameReport(result: result)
+    }
+
+    func endDirectGameSession() {
+        _ = v3kios_core_stop_session(core.value)
+        var neutral = v3kios_input_state_v1()
+        neutral.struct_size = UInt32(MemoryLayout<v3kios_input_state_v1>.size)
+        _ = v3kios_core_set_input_state(core.value, &neutral)
+        activeGame = nil
+        metrics = PerformanceMetrics()
+    }
+
+    func submitInput(_ input: ControllerInputSnapshot) {
+        var state = v3kios_input_state_v1()
+        state.struct_size = UInt32(MemoryLayout<v3kios_input_state_v1>.size)
+        state.buttons = input.buttons
+        state.left_x = input.leftX
+        state.left_y = input.leftY
+        state.right_x = input.rightX
+        state.right_y = input.rightY
+        _ = v3kios_core_set_input_state(core.value, &state)
+    }
+
+    func refreshMetrics() {
+        var snapshot = v3kios_metrics_v1()
+        snapshot.struct_size = UInt32(MemoryLayout<v3kios_metrics_v1>.size)
+        guard v3kios_core_get_metrics(core.value, &snapshot).rawValue == 0 else {
+            metrics = PerformanceMetrics()
+            return
+        }
+        metrics = PerformanceMetrics(
+            validityMask: snapshot.validity_mask,
+            guestFPS: snapshot.guest_fps,
+            frameTimeMS: snapshot.frame_time_ms,
+            hostCPUPercent: snapshot.host_cpu_percent,
+            hostMemoryBytes: snapshot.host_memory_bytes
+        )
+    }
+
+    func attachDisplaySurface(_ layer: CAMetalLayer, drawableSize: CGSize, scale: CGFloat) -> Bool {
+        guard drawableSize.width > 0, drawableSize.height > 0,
+              drawableSize.width <= CGFloat(UInt32.max),
+              drawableSize.height <= CGFloat(UInt32.max), scale > 0 else { return false }
+        var surface = v3kios_display_surface_v1()
+        surface.struct_size = UInt32(MemoryLayout<v3kios_display_surface_v1>.size)
+        surface.metal_layer = Unmanaged.passUnretained(layer).toOpaque()
+        surface.drawable_width = UInt32(drawableSize.width.rounded())
+        surface.drawable_height = UInt32(drawableSize.height.rounded())
+        surface.scale = Float(scale)
+        let result = v3kios_core_attach_display_surface(core.value, &surface)
+        guard result.rawValue == 0 else {
+            error = description(for: result)
+            return false
+        }
+        return true
+    }
+
+    func detachDisplaySurface() {
+        _ = v3kios_core_detach_display_surface(core.value)
+    }
+
+    func gameIconURL(for game: GameLibraryItem) -> URL? {
+        guard !game.iconRelativePath.isEmpty,
+              let container = gameContainerURL(for: game),
+              let root = Self.resolveGameRoot(container) else { return nil }
+        return root.appendingPathComponent(game.iconRelativePath)
     }
 
     func bootSystemSoftware() {
@@ -203,6 +332,56 @@ final class CoreStatusModel {
         }
     }
 
+    private func restoreGames() {
+        gameLibraryBusy = true
+        do {
+            let supportRoot = try Self.applicationSupportRoot()
+            let coreHandle = core.value
+            Task {
+                do {
+                    games = try await Task.detached(priority: .utility) {
+                        let generations = supportRoot.appendingPathComponent(
+                            "Games/Generations",
+                            isDirectory: true
+                        )
+                        try FileManager.default.createDirectory(
+                            at: generations,
+                            withIntermediateDirectories: true
+                        )
+                        let candidates = try FileManager.default.contentsOfDirectory(
+                            at: generations,
+                            includingPropertiesForKeys: nil,
+                            options: [.skipsHiddenFiles]
+                        )
+                        return candidates.compactMap { candidate in
+                            let snapshot = Self.inventoryGame(path: candidate.path, handle: coreHandle)
+                            return snapshot.ready
+                                ? Self.makeGameItem(
+                                    snapshot: snapshot,
+                                    container: candidate,
+                                    supportRoot: supportRoot
+                                )
+                                : nil
+                        }.sorted {
+                            $0.title.localizedStandardCompare($1.title) == .orderedAscending
+                        }
+                    }.value
+                } catch {
+                    games = []
+                }
+                gameLibraryBusy = false
+            }
+        } catch {
+            games = []
+            gameLibraryBusy = false
+        }
+    }
+
+    private func gameContainerURL(for game: GameLibraryItem) -> URL? {
+        guard let supportRoot = try? Self.applicationSupportRoot() else { return nil }
+        return supportRoot.appendingPathComponent(game.containerRelativePath, isDirectory: true)
+    }
+
     private func apply(_ snapshot: FirmwareInventorySnapshot) {
         firmwareReady = snapshot.ready
         firmwareVersion = snapshot.version
@@ -226,6 +405,42 @@ final class CoreStatusModel {
         let root = base.appendingPathComponent("vita3kios", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
+    }
+
+    private func writeDirectGameReport(result: v3kios_result_v1) {
+        guard let game = activeGame else { return }
+        let report: [String: Any] = [
+            "schemaVersion": 1,
+            "mode": "direct-game",
+            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "result": description(for: result),
+            "titleID": game.titleID,
+            "title": game.title,
+            "version": game.version,
+            "generation": game.generation,
+            "checkpoint": directBootCheckpoint,
+            "blocker": directBootBlocker,
+            "detail": directBootDetail,
+            "vita3kiosCommit": vita3kiosCommit,
+            "upstreamCommit": upstreamCommit,
+            "platform": platform,
+            "operatingSystem": ProcessInfo.processInfo.operatingSystemVersionString,
+        ]
+        do {
+            let documents = try FileManager.default.url(
+                for: .documentDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
+            try data.write(
+                to: documents.appendingPathComponent("direct-game-boot-report.json"),
+                options: .atomic
+            )
+        } catch {
+            // Diagnostics must not change session behavior.
+        }
     }
 
     private func writeSystemSoftwareReport() {
@@ -263,6 +478,110 @@ final class CoreStatusModel {
         } catch {
             // A report write failure must not invalidate an otherwise usable firmware generation.
         }
+    }
+
+    nonisolated private static func copyAndInventoryGame(
+        source: URL,
+        supportRoot: URL,
+        handle: v3kios_core_handle_t
+    ) throws -> GameLibraryItem {
+        let accessed = source.startAccessingSecurityScopedResource()
+        defer { if accessed { source.stopAccessingSecurityScopedResource() } }
+
+        let fileManager = FileManager.default
+        let gamesRoot = supportRoot.appendingPathComponent("Games", isDirectory: true)
+        let generationsRoot = gamesRoot.appendingPathComponent("Generations", isDirectory: true)
+        try fileManager.createDirectory(at: generationsRoot, withIntermediateDirectories: true)
+        let staging = gamesRoot.appendingPathComponent("staging-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try fileManager.copyItem(at: source, to: staging)
+            let staged = inventoryGame(path: staging.path, handle: handle)
+            guard staged.ready else {
+                throw GameImportError.notReady(staged.detail)
+            }
+            let destination = generationsRoot.appendingPathComponent(staged.generation, isDirectory: true)
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: staging)
+            } else {
+                try fileManager.moveItem(at: staging, to: destination)
+            }
+            let installed = inventoryGame(path: destination.path, handle: handle)
+            guard installed.ready else {
+                throw GameImportError.notReady(installed.detail)
+            }
+            return makeGameItem(snapshot: installed, container: destination, supportRoot: supportRoot)
+        } catch {
+            try? fileManager.removeItem(at: staging)
+            throw error
+        }
+    }
+
+    nonisolated private static func inventoryGame(
+        path: String,
+        handle: v3kios_core_handle_t
+    ) -> GameInventorySnapshot {
+        var info = v3kios_game_info_v1()
+        info.struct_size = UInt32(MemoryLayout<v3kios_game_info_v1>.size)
+        let result = path.withCString {
+            v3kios_core_inventory_game(handle, $0, &info)
+        }
+        return GameInventorySnapshot(
+            ready: info.state == V3KIOS_GAME_BOOT_READY,
+            generation: copyString(info.generation_id),
+            titleID: copyString(info.title_id),
+            title: copyString(info.title),
+            version: copyString(info.version),
+            category: copyString(info.category),
+            contentID: copyString(info.content_id),
+            ebootRelativePath: copyString(info.eboot_relative_path),
+            iconRelativePath: copyString(info.icon_relative_path),
+            fileCount: info.file_count,
+            totalBytes: info.total_bytes,
+            detail: copyString(info.detail),
+            resultDescription: copyString(v3kios_result_description(result))
+        )
+    }
+
+    nonisolated private static func makeGameItem(
+        snapshot: GameInventorySnapshot,
+        container: URL,
+        supportRoot: URL
+    ) -> GameLibraryItem {
+        let relative = container.path.replacingOccurrences(
+            of: supportRoot.path + "/",
+            with: "",
+            options: [.anchored]
+        )
+        return GameLibraryItem(
+            generation: snapshot.generation,
+            titleID: snapshot.titleID,
+            title: snapshot.title,
+            version: snapshot.version,
+            category: snapshot.category,
+            contentID: snapshot.contentID,
+            containerRelativePath: relative,
+            ebootRelativePath: snapshot.ebootRelativePath,
+            iconRelativePath: snapshot.iconRelativePath,
+            fileCount: snapshot.fileCount,
+            totalBytes: snapshot.totalBytes
+        )
+    }
+
+    nonisolated private static func resolveGameRoot(_ container: URL) -> URL? {
+        let fileManager = FileManager.default
+        let isRoot = fileManager.fileExists(atPath: container.appendingPathComponent("eboot.bin").path) &&
+            fileManager.fileExists(atPath: container.appendingPathComponent("sce_sys/param.sfo").path)
+        if isRoot { return container }
+        guard let children = try? fileManager.contentsOfDirectory(
+            at: container,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+        let candidates = children.filter { child in
+            fileManager.fileExists(atPath: child.appendingPathComponent("eboot.bin").path) &&
+                fileManager.fileExists(atPath: child.appendingPathComponent("sce_sys/param.sfo").path)
+        }
+        return candidates.count == 1 ? candidates[0] : nil
     }
 
     nonisolated private static func copyAndInventoryVitaFS(
@@ -377,6 +696,69 @@ enum CoreCapability {
     static let firmwarePUPPreflight: UInt64 = 1 << 6
     static let firmwareInventory: UInt64 = 1 << 7
     static let systemShellPreflight: UInt64 = 1 << 8
+    static let gameInventory: UInt64 = 1 << 9
+    static let directGamePreflight: UInt64 = 1 << 10
+    static let inputState: UInt64 = 1 << 11
+    static let metricsSnapshot: UInt64 = 1 << 12
+    static let displaySurface: UInt64 = 1 << 13
+}
+
+struct GameLibraryItem: Identifiable, Hashable, Sendable {
+    var id: String { generation }
+    let generation: String
+    let titleID: String
+    let title: String
+    let version: String
+    let category: String
+    let contentID: String
+    let containerRelativePath: String
+    let ebootRelativePath: String
+    let iconRelativePath: String
+    let fileCount: UInt32
+    let totalBytes: UInt64
+}
+
+struct ControllerInputSnapshot: Equatable, Sendable {
+    var buttons: UInt32 = 0
+    var leftX: Float = 0
+    var leftY: Float = 0
+    var rightX: Float = 0
+    var rightY: Float = 0
+}
+
+struct PerformanceMetrics: Equatable, Sendable {
+    var validityMask: UInt32 = 0
+    var guestFPS: Float = 0
+    var frameTimeMS: Float = 0
+    var hostCPUPercent: Float = 0
+    var hostMemoryBytes: UInt64 = 0
+
+    func has(_ bit: UInt32) -> Bool {
+        (validityMask & bit) != 0
+    }
+}
+
+enum MetricValidity {
+    static let guestFPS: UInt32 = 1 << 0
+    static let frameTime: UInt32 = 1 << 1
+    static let hostCPU: UInt32 = 1 << 2
+    static let hostMemory: UInt32 = 1 << 3
+}
+
+enum VitaInputButton {
+    static let select: UInt32 = 1 << 0
+    static let start: UInt32 = 1 << 3
+    static let up: UInt32 = 1 << 4
+    static let right: UInt32 = 1 << 5
+    static let down: UInt32 = 1 << 6
+    static let left: UInt32 = 1 << 7
+    static let l: UInt32 = 1 << 8
+    static let r: UInt32 = 1 << 9
+    static let triangle: UInt32 = 1 << 12
+    static let circle: UInt32 = 1 << 13
+    static let cross: UInt32 = 1 << 14
+    static let square: UInt32 = 1 << 15
+    static let ps: UInt32 = 1 << 16
 }
 
 private struct FirmwareInventorySnapshot: Sendable {
@@ -391,7 +773,34 @@ private struct FirmwareInventorySnapshot: Sendable {
     let resultDescription: String
 }
 
+private struct GameInventorySnapshot: Sendable {
+    let ready: Bool
+    let generation: String
+    let titleID: String
+    let title: String
+    let version: String
+    let category: String
+    let contentID: String
+    let ebootRelativePath: String
+    let iconRelativePath: String
+    let fileCount: UInt32
+    let totalBytes: UInt64
+    let detail: String
+    let resultDescription: String
+}
+
 private enum FirmwareImportError: LocalizedError {
+    case notReady(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .notReady(detail):
+            return detail
+        }
+    }
+}
+
+private enum GameImportError: LocalizedError {
     case notReady(String)
 
     var errorDescription: String? {

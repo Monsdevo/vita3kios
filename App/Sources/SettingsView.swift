@@ -25,11 +25,16 @@ struct SettingsView: View {
                     LabeledContent("Architecture", value: core.platform)
                     LabeledContent("Direct Game", value: availability(CoreCapability.directGame))
                     LabeledContent("System Software", value: availability(CoreCapability.systemSoftware))
+                    LabeledContent("Game inventory", value: availability(CoreCapability.gameInventory))
+                    LabeledContent("Direct Game preflight", value: availability(CoreCapability.directGamePreflight))
+                    LabeledContent("Native display surface", value: availability(CoreCapability.displaySurface))
                 }
 
                 Section("Interface") {
                     LabeledContent("Design", value: "Apple Native")
                     LabeledContent("Accent", value: "PlayStation-inspired")
+                    LabeledContent("Touch controls", value: availability(CoreCapability.inputState))
+                    LabeledContent("Performance HUD", value: "Top-left · Compact")
                 }
 
                 Section {

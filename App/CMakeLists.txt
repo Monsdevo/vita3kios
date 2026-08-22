@@ -70,6 +70,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         Sources/vita3kiosApp.swift
         Sources/CoreStatusModel.swift
         Sources/DesignSystem.swift
+        Sources/GameDisplayView.swift
+        Sources/GameplayView.swift
         Sources/RootView.swift
         Sources/CoreStatusCard.swift
         Sources/SettingsView.swift

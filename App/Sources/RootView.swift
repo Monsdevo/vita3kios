@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct RootView: View {
@@ -6,6 +7,8 @@ struct RootView: View {
     @State private var showingSettings = false
     @State private var showingPUPImporter = false
     @State private var showingVitaFSImporter = false
+    @State private var showingGameImporter = false
+    @State private var presentedGame: GameLibraryItem?
 
     var body: some View {
         NavigationStack {
@@ -13,8 +16,8 @@ struct RootView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     header
                     readiness
-                    firmware
                     library
+                    firmware
                     CoreStatusCard(core: core)
                 }
                 .padding(.horizontal)
@@ -48,6 +51,23 @@ struct RootView: View {
             ) { result in
                 if case let .success(urls) = result, let url = urls.first {
                     core.importExtractedVitaFS(url)
+                }
+            }
+            .fileImporter(
+                isPresented: $showingGameImporter,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                if case let .success(urls) = result, let url = urls.first {
+                    core.importExtractedGame(url)
+                }
+            }
+            .fullScreenCover(item: $presentedGame, onDismiss: {
+                core.endDirectGameSession()
+            }) { game in
+                GameplayView(core: core, game: game) {
+                    core.endDirectGameSession()
+                    presentedGame = nil
                 }
             }
         }
@@ -182,22 +202,101 @@ struct RootView: View {
                 Text("Games")
                     .font(.title3.bold())
                 Spacer()
-                Button("Import", systemImage: "plus") {}
-                    .disabled(true)
+                Button("Import", systemImage: "plus") {
+                    showingGameImporter = true
+                }
+                    .disabled(core.gameImportBusy || core.gameLibraryBusy)
             }
 
-            ContentUnavailableView {
-                Label("No Games", systemImage: "rectangle.stack")
-            } description: {
-                Text("Game import becomes available after the core boot gate passes.")
-            } actions: {
-                Button("Import Game", systemImage: "square.and.arrow.down") {}
+            if core.games.isEmpty {
+                ContentUnavailableView {
+                    Label("No Games", systemImage: "rectangle.stack")
+                } description: {
+                    Text("Import a legally dumped extracted game folder containing eboot.bin and sce_sys/param.sfo.")
+                } actions: {
+                    Button("Import Extracted Game", systemImage: "square.and.arrow.down") {
+                        showingGameImporter = true
+                    }
                     .buttonStyle(.borderedProminent)
-                    .disabled(true)
+                    .disabled(core.gameImportBusy || core.gameLibraryBusy)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(.background, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            } else {
+                LazyVStack(spacing: 12) {
+                    ForEach(core.games) { game in
+                        GameLibraryRow(core: core, game: game) {
+                            presentedGame = game
+                        }
+                    }
+                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
-            .background(.background, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+
+            if core.gameLibraryBusy || core.gameImportBusy {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(core.gameLibraryBusy ? "Loading game library…" : "Importing and validating game…")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let error = core.error {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
         }
+    }
+}
+
+private struct GameLibraryRow: View {
+    let core: CoreStatusModel
+    let game: GameLibraryItem
+    let play: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            GameIcon(url: core.gameIconURL(for: game))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(game.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                Text("\(game.titleID) · Version \(game.version)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(ByteCountFormatter.string(fromByteCount: Int64(game.totalBytes), countStyle: .file))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer(minLength: 8)
+            Button("Play", systemImage: "play.fill", action: play)
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct GameIcon: View {
+    let url: URL?
+
+    var body: some View {
+        Group {
+            if let url, let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "gamecontroller.fill")
+                    .font(.title2)
+                    .foregroundStyle(PlayStationAccent.blue)
+            }
+        }
+        .frame(width: 58, height: 58)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
     }
 }
