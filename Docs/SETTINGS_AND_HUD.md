@@ -1,129 +1,70 @@
-# vita3kios Ayarlar ve Performans HUD Tasarım Sözleşmesi
+# vita3kios Settings and Performance HUD Design Contract
 
-- Durum: Uygulama öncesi bağlayıcı tasarım tabanı
-- Roadmap uyumu: `ROADMAP.txt` v0.2; özellikle Faz 2B, 3, 7, 7A, 8A, 9, 10, 11, 12 ve 15
-- Upstream tabanı: Vita3K `496939b602703951277263c7b3e60a9ae36879c1`
-- Son güncelleme: 2026-08-22
+- Status: Binding pre-implementation design baseline
+- Roadmap authority: `ROADMAP.txt` v0.5
+- Upstream baseline: Vita3K `496939b602703951277263c7b3e60a9ae36879c1`
+- Last updated: 2026-08-22
 
-Bu belge, vita3kios ayar sisteminin ve performans HUD'ının veri modeli, C ABI,
-SwiftUI bilgi mimarisi, doğrulama, kalıcılık ve kabul testlerini tanımlar.
-`ROADMAP.txt` ana yol haritası olmaya devam eder. Çelişki halinde roadmap
-önceliklidir ve bu belge roadmap değişiklik kaydı olmadan kapsam genişletemez.
+This document defines the data model, C ABI, SwiftUI information architecture,
+validation, persistence, metrics, and acceptance tests for settings and the
+performance HUD. `ROADMAP.txt` remains authoritative.
 
-Bu belgede kullanılan "zorunlu", "olmamalı" ve "yalnızca" ifadeleri uygulama
-sözleşmesidir. Öneri olarak işaretlenen ayrıntılar gerçek cihaz ölçümüne göre
-değişebilir.
+## 1. Required product behavior
 
-## 1. Değişmez ürün davranışı
+- Setting precedence is `built-in < global < mode < title < session`.
+- Direct Game and System Software use separate mode profiles.
+- A title launched by SceShell receives title overrides. Returning to the shell
+  restores the effective System Software profile.
+- Standard shows safe daily controls. Advanced shows compatibility controls.
+  Developer Mode shows diagnostics only.
+- Swift never reads or writes upstream C++ `Config`, YAML, or XML directly.
+- Unsupported settings are hidden or show a specific reason.
+- The HUD defaults to Compact, enabled, and top-right in both boot modes.
+- An unavailable metric is hidden or displayed as an em dash. It is never
+  represented by zero, an estimate, or an unrelated counter.
+- Firmware, games, licenses, keys, and private user data are never copied into
+  profiles, fixtures, or diagnostic bundles.
+- All repository-owned UI strings, diagnostics, comments, and documentation are
+  written in English.
 
-- Ayar çözümleme sırası `built-in defaults < global < mode profile < per-title
-  override < session override` olacaktır.
-- `Direct Game` ve `System Software` ayrı mode profillerine sahip olacaktır.
-- System Software içinden bir title açıldığında title override'ı uygulanacak;
-  title kapanıp shell'e dönüldüğünde System Software etkili ayarları geri
-  yüklenecektir.
-- Ayarlar ayrıntılı olacaktır; fakat normal görünüm güvenli seçenekleri,
-  `Advanced` görünümü uyumluluk/risk seçeneklerini, `Developer Mode` ise yalnız
-  tanılama seçeneklerini gösterecektir.
-- Swift katmanı upstream `Config`, C++ nesnesi, YAML veya XML yapısını doğrudan
-  görmeyecek ve yazmayacaktır.
-- Bir seçenek cihazda veya aktif core sürümünde işlevsel değilse yalnız gri bir
-  toggle olarak bırakılmayacak; normal UI'dan gizlenecek veya açık bir
-  `Desteklenmiyor` nedeni gösterecektir.
-- HUD, Direct Game ve System Software oturumlarında varsayılan olarak açık,
-  `Compact` ve sağ üstte olacaktır. Library/ayar ekranında emülasyon oturumu
-  yokken gösterilmeyecektir.
-- Ölçülmeyen değer sıfırla, tahminle ya da başka bir sayacın vekiliyle
-  doldurulmayacaktır. Geçersiz metric gizlenecek veya `—` gösterilecektir.
-- Firmware, oyun, lisans anahtarı veya kullanıcıya ait hassas içerik ayar
-  profiline, test fixture'ına ya da tanı paketine kopyalanmayacaktır.
+## 2. Upstream adaptation boundary
 
-## 2. Upstream gerçekliği ve adaptasyon sınırı
+At the pinned revision, Vita3K loads global values through `config.yml` and
+collects per-game values in `Config::CurrentConfig`. Its custom XML profile is a
+complete snapshot, not a sparse override list. vita3kios therefore stores only
+explicitly overridden fields and resolves them before applying an effective
+`CurrentConfig`.
 
-Pinlenen upstream sürümde global ayarlar `config.yml` üzerinden `Config`
-nesnesine yüklenir. Oyun-bazlı ayarlanabilen alanlar `Config::CurrentConfig`
-içinde toplanmıştır. Mevcut custom config yolu
-`config/config_<app_path>.xml` biçimindedir.
+The upstream restart-required set includes CPU optimizations, renderer, GPU
+device, Android custom driver, high accuracy, resolution multiplier, memory
+mapping, audio backend, and validation layer. On iOS, the renderer is fixed to
+Vulkan through MoltenVK. Renderer, GPU, and Android driver choices are not normal
+settings. Other fields use `sessionRecreateRequired`; capability results may
+raise this to `hostRestartRequired` if safe in-process recreation is unavailable.
 
-Upstream custom config davranışının önemli özelliği şudur:
+Defaults come from the bridge. Swift does not duplicate them. The pinned global
+default for `disable-surface-sync`, for example, differs from the bare
+`CurrentConfig` field initializer.
 
-1. Global değerler `CurrentConfig` içine kopyalanır.
-2. Custom XML varsa XML'deki tam profil bunun üzerine yüklenir.
-3. Custom XML bütün alanların snapshot'ını saklar; alan-bazlı `inherit` durumu
-   yoktur.
+The existing upstream overlay counts accepted `sceDisplaySetFrameBuf` calls in
+roughly one-second wall-time buckets. Its historical average/minimum/maximum
+values are not a frame-time distribution or 1% low. vita3kios must not relabel
+those values with stronger semantics.
 
-Bu davranış masaüstü UI için yeterlidir, fakat vita3kios'un mode/title/session
-önceliğini tek başına karşılamaz. Örneğin bir title profili oluşturulduktan
-sonra global çözünürlük değiştirilirse tam snapshot içindeki eski title değeri
-global değişikliği gölgeler. Bu nedenle iOS profil katmanı sparse, yani yalnız
-değiştirilmiş alanları saklayacaktır. Bridge, etkili sparse profili
-`Config::CurrentConfig` değerlerine dönüştürecektir.
+## 3. Scope, inheritance, and reset
 
-Upstream'in resmî restart-required listesi şu alanları içerir:
-
-- CPU optimizasyonu
-- Renderer backend'i
-- Grafik aygıtı
-- Android custom driver
-- High accuracy
-- Resolution multiplier
-- Memory mapping
-- Audio backend
-- Validation layer
-
-vita3kios'ta renderer Apple kod yolunda Vulkan'a sabitleneceği için backend,
-GPU seçimi ve Android custom driver normal ayar olarak sunulmayacaktır. Diğer
-restart alanları descriptor tarafından `sessionRecreateRequired` olarak
-işaretlenecektir. Renderer veya audio host güvenle aynı process içinde yeniden
-yaratılamazsa capability sonucu bunu `hostRestartRequired` seviyesine
-yükseltebilir.
-
-Default değer Swift tarafında ikinci kez hardcode edilmeyecektir. Pinlenen
-sürümde bunun neden önemli olduğuna somut bir örnek vardır:
-`disable-surface-sync` global macro default'u `true`, çıplak
-`CurrentConfig` field initializer'ı ise `false` değeridir; normal load yolunda
-global değer `CurrentConfig` içine kopyalanır. UI yalnız bridge'in etkili
-default'unu göstermeli, C++ struct initializer'ını tahmin etmemelidir.
-
-### 2.1 Upstream HUD'ın mevcut anlamı
-
-Mevcut Vita3K performans overlay'i şunları sunar:
-
-- `Minimum`: FPS
-- `Low`: FPS ve yaklaşık ms/frame
-- `Medium`: FPS, ms/frame, average/minimum/maximum
-- `Maximum`: Medium verileri ve FPS grafiği
-
-Mevcut FPS, kabul edilen `sceDisplaySetFrameBuf` çağrılarının yaklaşık bir
-saniyelik duvar-zamanı aralığında sayılmasıdır. Average/minimum/maximum,
-başlangıçta sıfırlardan oluşan 20 adet birer saniyelik FPS bucket'ı üzerinden
-hesaplanır. Bu değerler gerçek frametime dağılımı veya 1% low değildir.
-vita3kios yeni metrics katmanı hazır olmadan bu alanları farklı anlamla
-etiketlemeyecektir.
-
-## 3. Scope ve inheritance modeli
-
-### 3.1 Scope türleri
-
-| Scope | Kalıcılık | Kimlik | Amaç |
+| Scope | Persistence | Identity | Purpose |
 | --- | --- | --- | --- |
-| Built-in | Salt okunur | Core/schema sürümü | Core'un güvenli başlangıç değerleri |
-| Global | Kalıcı | Tek profil | Her oturumun kullanıcı varsayılanı |
-| Mode | Kalıcı | `directGame` veya `systemSoftware` | Boot moduna özgü varsayılan |
-| Title | Kalıcı | Kanonik title ID | Belirli oyun veya system app uyumluluk ayarı |
-| Session | Geçici | Session UUID | Bir sonraki stop'a kadar hızlı/geçici değişiklik |
-| Host | Kalıcı, global | Cihaz/app | Native UI, izin, storage ve JIT host tercihleri |
+| Built-in | Read-only | Core/schema version | Safe core defaults |
+| Global | Persistent | One profile | User default for every session |
+| Mode | Persistent | `directGame` or `systemSoftware` | Boot-mode defaults |
+| Title | Persistent | Canonical title ID | Per-title compatibility overrides |
+| Session | Temporary | Session UUID | Changes until stop |
+| Host | Persistent | App/device | Native UI, storage, permission, and JIT preferences |
 
-`Title` kimliği mutlak sandbox yolu olmayacaktır. Library scanner'ın doğruladığı
-kanonik title ID kullanılacaktır. Aynı title update/reimport edildiğinde profil
-korunacaktır. System shell için title ID taklit edilmeyecek; `systemSoftware`
-mode profili kullanılacaktır. Gerçek system app title'ları bulunursa kendi
-kanonik kimlikleriyle title override alabilir.
-
-### 3.2 Deterministik çözümleme
-
-Her alan `unset` veya tipli bir değer taşır. `unset`, üst katmanın etkili
-değerini kullanmak anlamına gelir.
+Absolute sandbox paths never identify title profiles. The library's validated
+canonical title ID survives update and reimport. The shell uses the System
+Software mode profile; real system apps may have title profiles.
 
 ```text
 effective = schema.builtInDefaults
@@ -135,252 +76,150 @@ effective.apply(session.transientOverrides)
 effective = validateAgainstCapabilities(effective)
 ```
 
-Capability ve güvenlik sınırları kullanıcı override'ından sonra uygulanır;
-hiçbir profil fiziksel olarak desteklenmeyen memory mapping yöntemini veya
-mevcut olmayan GPU metric'ini zorlayamaz.
+Capability and safety limits are applied after user overrides.
 
-System Software oturumundaki geçiş sırası şöyledir:
+- Use Parent Profile removes a field from the current sparse profile.
+- Reset Category removes only category keys in the open scope.
+- Reset Profile removes all overrides in the open scope. It never removes games,
+  saves, caches, or firmware.
+- A global reset returns to the built-in value.
+- Session overrides are not persisted unless the user explicitly saves them in a
+  separate transaction.
+- The System Software safe preset is read-only. Risky shell changes require
+  explicit confirmation.
 
-```text
-system shell
-  -> built-in + global + systemSoftware + session
-system shell launches title
-  -> built-in + global + systemSoftware + title + session
-title exits to shell
-  -> title katmanı kaldırılır; shell etkili ayarları geri yüklenir
-```
+## 4. Descriptor model
 
-Title çalışırken değiştirilemeyen bir alan farklılaşıyorsa geçişten önce
-session kaynakları yeniden yaratılır veya kullanıcıya tipli hata döner. Eski ve
-yeni profil kısmen karıştırılmaz.
+The UI is generated from versioned bridge descriptors. Each descriptor provides:
 
-### 3.3 Reset ve override davranışı
+- a stable, nonlocalized key;
+- title, summary, and warning localization keys;
+- a typed value and default, range, step, or choices;
+- allowed scopes and visibility level;
+- capability requirements and an unsupported reason;
+- live, next-boot, session-recreate, or host-restart behavior;
+- safe, compatibility, destructive-data, or diagnostic risk;
+- dependencies and cross-field validation identifiers;
+- export and redaction policy; and
+- introduced and removed schema versions.
 
-- `Globali Kullan`, ilgili alanı title/mode profilinden siler; global değeri
-  title profiline kopyalamaz.
-- `Bu Kategoriyi Sıfırla`, yalnız açık scope'taki kategori anahtarlarını siler.
-- `Profili Sıfırla`, açık scope'taki tüm override'ları siler; oyun, save, cache
-  veya firmware'e dokunmaz.
-- Global reset, anahtarı built-in değere döndürür.
-- Session override hiçbir zaman diske yazılmaz. Kullanıcı açıkça `Profile Kaydet`
-  işlemi seçerse ayrı bir transaction ile mode/title scope'una dönüştürülür.
-- System Software güvenli preset'i salt okunur built-in tabanın parçasıdır.
-  Shell doğruluğunu bozabilecek Advanced değişiklikler ayrı onay ister.
+Localized labels are never persistence keys. `Live` means the running-core effect
+has been tested. Scope abbreviations below are G (Global), DG (Direct Game), SS
+(System Software), T (Title), X (Session), and H (Host).
 
-## 4. Ayar descriptor modeli
+## 5. Settings catalog
 
-UI hardcode edilmiş toggle listesinden değil, bridge'in döndürdüğü versioned
-descriptor'lardan oluşturulacaktır. Her descriptor en az şu bilgileri taşır:
+Every row is capability gated. An upstream mapping does not guarantee visibility.
 
-- Yerelleştirilmemiş, sürümler boyunca kararlı `key`
-- Yerelleştirme anahtarları: title, kısa açıklama, ayrıntılı uyarı
-- Tip: boolean, signed integer, unsigned integer, floating point, string,
-  enumeration, bitset veya string list
-- Built-in default ve varsa min/max/step/izinli enum değerleri
-- İzin verilen scope maskesi
-- Görünürlük seviyesi: Standard, Advanced veya Developer
-- Capability gereksinimleri ve unsupported nedeni
-- Değişim etkisi: live, next boot, session recreate veya host restart
-- Risk sınıfı: safe, compatibility, destructive-data veya diagnostic
-- Bağımlı alanlar ve cross-field validation kimliği
-- Ayarın secret/diagnostic export/redaction davranışı
-- Schema'ya eklendiği ve varsa kaldırıldığı sürüm
+### 5.1 Core, CPU, graphics, and display
 
-Swift yerelleştirilmiş başlığı kalıcı anahtar olarak kullanmayacaktır. Enum
-değerleri de kullanıcıya görünen metinden değil kararlı koddan oluşacaktır.
+| vita3kios key | Upstream mapping | Scope | Level | Apply | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `core.modules.mode` | `modules-mode` | G,DG,SS,T | Advanced | Boot | Automatic is safe; manual modes require module inventory |
+| `core.modules.lle` | `lle-modules` | G,DG,SS,T | Advanced | Boot | Only validated decrypted modules are selectable |
+| `cpu.optimizations` | `cpu-opt` | G,DG,SS,T | Advanced | Recreate | Disabling Dynarmic optimizations can be very slow |
+| `jit.status` | Native | H, read-only | Standard | None | Enabled, unavailable, preparation, or error |
+| `jit.launchProvider` | Native | H | Advanced | Host | Only with multiple validated providers |
+| `firmware.activeInstall` | Native | H,SS | Standard | Boot | Stores inventory identity, never the source PUP path |
+| `system.mode.safePreset` | Native | SS | Standard | Boot | Tested shell baseline |
+| `graphics.accuracy` | `high-accuracy` | G,DG,SS,T | Advanced | Recreate | Capability-gated tradeoff |
+| `graphics.resolutionScale` | `resolution-multiplier` | G,DG,SS,T,X | Standard | Recreate | Device-tested range; safe default 1x |
+| `graphics.memoryMapping` | `memory-mapping` | G,DG,SS,T | Advanced | Recreate | Only runtime-supported methods |
+| `graphics.disableSurfaceSync` | `disable-surface-sync` | G,DG,T,X | Advanced | Live | Compatibility-sensitive speed option |
+| `graphics.screenFilter` | Runtime filter list | G,DG,SS,T,X | Standard | Live | Renderer supplies choices |
+| `graphics.framePacing` | Native | G,DG,SS,T,X | Standard | Live/Recreate | Host refresh must not alter guest timing |
+| `graphics.anisotropicFiltering` | `anisotropic-filtering` | G,DG,SS,T,X | Standard | Live | Device-limited choices |
+| `graphics.asyncPipelineCompilation` | upstream field | G,DG,SS,T,X | Standard | Live | Requires thread-safe compilation |
+| `graphics.shaderCache` | `shader-cache` | G,DG,SS,T | Standard | Boot | Versioned with the core pin |
+| `graphics.textureCache` | `texture-cache` | G,DG,SS,T | Standard | Boot | Explain memory cost |
+| `graphics.fpsHack` | `fps-hack` | G,DG,T,X | Advanced | Live | May double game speed; forbidden for System Software |
+| `textures.replacementsEnabled` | `import-textures` | G,DG,T,X | Advanced | Live | Import content into app storage |
+| `textures.exportEnabled` | `export-textures` | G,DG,T,X | Developer | Live | Requires quota and approval |
+| `display.scalingMode` | desktop scaling flags | G,DG,SS,T,X | Standard | Live | Aspect Fit, Fill/Crop, validated Integer |
+| `display.fileLoadingDelay` | `file-loading-delay` | G,DG,T | Advanced | Boot | Range 0-30 |
+| `display.shaderCompileNotice` | `show-compile-shaders` | G,DG,SS,T | Standard | Live | Brief native notice |
+| `display.screenshotFormat` | `screenshot-format` | H | Standard | Live | None, JPEG, or PNG |
 
-### 4.1 Scope kısaltmaları ve uygulama sınıfları
+Renderer backend, GPU index, Android driver, and direct-SPIR-V controls remain
+hidden unless a future iOS capability makes them meaningful.
 
-Aşağıdaki tablolarda:
+### 5.2 Audio, system, sensors, and network
 
-- `G`: Global
-- `DG`: Direct Game mode profili
-- `SS`: System Software mode profili
-- `T`: Title override
-- `X`: Geçici session override
-- `H`: Host/global native tercih
-- `Live`: Güvenle çalışan oturuma uygulanır
-- `Boot`: Bir sonraki title/system boot'unda uygulanır
-- `Recreate`: Aktif emülasyon session'ı güvenli stop/recreate ister
-- `Host`: iOS uygulaması yeniden açılmalıdır
-- `Cap`: Capability doğrulanırsa gösterilir
-- `Hidden`: Normal iOS UI'da gösterilmez
+| vita3kios key | Upstream mapping | Scope | Level | Apply | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `audio.volume` | `audio-volume` | G,DG,SS,T,X | Standard | Live | Range 0-100 |
+| `audio.ngsEnabled` | `ngs-enable` | G,DG,SS,T | Advanced | Boot | Only when NGS is built |
+| `audio.bufferDuration` | Native | G,DG,SS,T | Advanced | Recreate | Device-measured choices |
+| `audio.mixWithOthers` | Native | H | Standard | Live/Recreate | Test routes and interruptions |
+| `system.pstvMode` | `pstv-mode` | G,DG,SS,T | Advanced | Boot | Changes emulated hardware |
+| `system.confirmButton` | `sys-button` | G,DG,SS,T | Standard | Boot | Cross or Circle |
+| `system.language` | `sys-lang` | G,DG,SS,T | Standard | Boot | Separate from app language |
+| `system.dateFormat` | `sys-date-format` | G,DG,SS,T | Standard | Boot | Supported SCE formats |
+| `system.timeFormat` | `sys-time-format` | G,DG,SS,T | Standard | Boot | 12-hour or 24-hour |
+| `system.imeLanguages` | `ime-langs` | G,DG,SS,T | Advanced | Boot | Requires implemented IME |
+| `camera.front.source` | front camera fields | G,T | Advanced | Boot | None, device, imported image, or color |
+| `camera.back.source` | back camera fields | G,T | Advanced | Boot | Ask permission only when needed |
+| `motion.enabled` | inverse `disable-motion` | G,DG,SS,T,X | Standard | Live | Negation exists only in bridge |
+| `network.httpEnabled` | `http-enable` | G,DG,SS,T | Advanced | Boot | Disclose external-network behavior |
+| `network.psnPresenceOffline` | `psn-signed-in` | G,DG,SS,T | Advanced | Boot | Offline emulation, not PSN login |
+| `network.httpTimeout*` | timeout fields | G,DG,SS,T | Developer | Boot | Descriptor-bounded ranges |
+| `network.adhocAddress` | `adhoc-addr` | G,DG,SS,T | Developer | Boot | Interface index is not identity |
 
-`Live` işareti yalnız persistence değil, çalışan core üzerinde etkisinin test
-edilmiş olmasını gerektirir. Core uygulamıyorsa descriptor geçici olarak `Boot`
-veya `Recreate` döndürmelidir.
+The audio backend is fixed to the validated iOS host.
 
-## 5. Ayar kataloğu ve upstream eşlemesi
+### 5.3 Input and native host
 
-Tablodaki `vita3kios key` önerilen kararlı bridge anahtarıdır. Upstream adı `—`
-ise ayar iOS host/profile katmanına aittir. Bir upstream anahtarının tabloda
-bulunması onun iOS'ta mutlaka görünür olacağı anlamına gelmez.
+| vita3kios key | Upstream mapping | Scope | Level | Apply | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `input.controllerProfile` | controller binds | G,DG,SS,T | Standard | Live | Stable Vita actions, never SDL indexes |
+| `input.analogMultiplier` | upstream field | G,DG,SS,T,X | Advanced | Live | Descriptor-bounded |
+| `input.deadzone.left/right` | Native | G,DG,SS,T,X | Standard | Live | Independent live preview |
+| `touch.enabled` | Native | G,DG,SS,T,X | Standard | Live | Optional controller auto-hide |
+| `touch.layoutID` | Native | G,DG,SS,T | Standard | Live | Normalized orientation variants |
+| `touch.opacity` | Native | G,DG,SS,T,X | Standard | Live | Enforce readable visibility |
+| `touch.scale` | Native | G,DG,SS,T,X | Standard | Live | Reject unsafe layouts |
+| `touch.rearPanelMode` | Native | G,DG,SS,T | Advanced | Live | Visible zones or teachable gesture |
+| `motion.sensitivity` | Native | G,DG,SS,T,X | Advanced | Live | Host converts orientation |
+| `haptics.enabled` | Native | G,DG,SS,T,X | Standard | Live | Device/controller gated |
+| `lifecycle.pauseOnBackground` | Native | H | Standard | Live | Resource loss may force pause |
 
-### 5.1 Core, CPU ve firmware modülleri
+Desktop key-code arrays are not copied into the initial iPhone UI.
 
-| vita3kios key | Upstream anahtarı | Scope | Seviye | Görünürlük | Uygulama | Not |
-| --- | --- | --- | --- | --- | --- | --- |
-| `core.modules.mode` | `modules-mode` | G,DG,SS,T | Advanced | Firmware module inventory varsa | Boot | Automatic varsayılan; Auto+Manual ve Manual risklidir |
-| `core.modules.lle` | `lle-modules` | G,DG,SS,T | Advanced | Kurulu/decrypted module listesi varsa | Boot | Yalnız doğrulanmış `vs0/sys/external` modülleri seçilebilir |
-| `cpu.optimizations` | `cpu-opt` | G,DG,SS,T | Advanced | Cap | Recreate | Dynarmic optimizasyonunu kapatmak performansı ciddi düşürebilir |
-| `cpu.poolSize` | `cpu-pool-size` | G | Developer | Ölçüm doğrulanana kadar Hidden | Host | Masaüstü varsayılanını iOS'a körlemesine taşımama |
-| `jit.status` | — | H | Standard, read-only | Her zaman | — | Enabled/Unavailable/NeedsPreparation/Error; bir performans toggle'ı değildir |
-| `jit.launchProvider` | — | H | Advanced | Birden fazla doğrulanmış sağlayıcı varsa | Host | StikDebug/ileride desteklenen yöntem; entitlement üretmez |
-| `firmware.activeInstall` | — | H,SS | Standard | Birden fazla firmware snapshot varsa | Boot | Kullanıcının kurduğu doğrulanmış inventory kimliği; PUP yolu saklanmaz |
-| `system.mode.safePreset` | — | SS | Standard | Her zaman | Boot | Shell boot için test edilmiş uyumluluk tabanı; per-field override'ları silmez |
+### 5.4 HUD, logging, and developer settings
 
-### 5.2 GPU, renderer ve görüntü
+| vita3kios key | Upstream mapping | Scope | Level | Apply | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `hud.preset` | overlay fields | G,DG,SS,T,X | Standard | Live | Off, Compact, Standard, Detailed, Custom |
+| `hud.position` | overlay position | G,DG,SS,T,X | Advanced | Live | Top Right by default |
+| `hud.opacity` | Native | G,DG,SS,T,X | Advanced | Live | Enforce readable contrast |
+| `hud.scale` | Native | G,DG,SS,T,X | Advanced | Live | Compact starts near 11 pt |
+| `hud.updateRateHz` | Native | G,DG,SS,T,X | Advanced | Live | Default 4 Hz |
+| `hud.metricSelection` | Native | G,DG,SS,T,X | Advanced | Live | Capability-filtered |
+| `hud.includeInAppScreenshot` | Native | G,DG,SS,T | Advanced | Live | Only with compositor support |
+| `logging.level` | `log-level` | G | Developer | Live/Boot | Depends on live logger support |
+| `logging.archivePerTitle` | `archive-log` | G,DG,SS,T | Advanced | Boot | Redact private data |
+| `logging.activeShaders` | upstream field | G,DG,SS,T | Developer | Boot | High-volume warning |
+| `logging.uniforms` | upstream field | G,DG,SS,T | Developer | Boot | High-volume warning |
+| `debug.validationLayer` | `validation-layer` | G,DG,SS,T | Developer | Recreate | Only when packaged |
+| `debug.gdbStub` | `gdbstub` | G | Developer | Host | Debug builds only |
+| `debug.waitForDebugger` | upstream field | G | Developer | Host | Timeout and cancel required |
+| `debug.tracy*` | Tracy fields | G,DG,SS,T | Developer | Recreate | Tracy build only |
 
-| vita3kios key | Upstream anahtarı | Scope | Seviye | Görünürlük | Uygulama | Not |
-| --- | --- | --- | --- | --- | --- | --- |
-| `graphics.backend` | `backend-renderer` | — | — | Hidden; Apple'da Vulkan sabit | Recreate | Değer diagnostic export'a yazılabilir |
-| `graphics.device` | `gpu-idx` | — | — | Hidden; tek iOS GPU | Recreate | Birden çok cihaz capability'si oluşursa yeniden değerlendirilir |
-| `graphics.customDriver` | `custom-driver-name` | — | — | Hidden; Android-only | Recreate | iOS profil dosyasına yazılmaz |
-| `graphics.accuracy` | `high-accuracy` | G,DG,SS,T | Advanced | Vulkan feature sonucuna göre Cap | Recreate | Görsel doğruluk/performance trade-off'u açıklanır |
-| `graphics.resolutionScale` | `resolution-multiplier` | G,DG,SS,T,X | Standard | Cihaz limitine göre Cap | Recreate | Upstream UI 0.5x–8x/0.25 adım destekler; iOS seçenekleri ölçümle daraltılabilir; güvenli default 1x |
-| `graphics.memoryMapping` | `memory-mapping` | G,DG,SS,T | Advanced | Yalnız runtime mask'taki yöntemler | Recreate | Disabled/Double Buffer/External Host/Page Table; Native Buffer Android-only sayılır |
-| `graphics.disableSurfaceSync` | `disable-surface-sync` | G,DG,T,X | Advanced | Memory mapping etkinse Cap | Live | Speed hack; bazı oyunlarda doğruluk için sync gerekir; System Software'de varsayılan gizli/kilitli olabilir |
-| `graphics.screenFilter` | `screen-filter` | G,DG,SS,T,X | Standard | `renderer.get_supported_filters` sonucu | Live | Nearest/Bilinear/Bicubic/FXAA/FSR listesini hardcode etme |
-| `graphics.vsync` | `v-sync` | — | Advanced | MoltenVK etkisi cihazda kanıtlanana kadar Hidden | Live/Recreate | Upstream masaüstü tooltip'i OpenGL davranışını tarif eder |
-| `graphics.framePacing` | — | G,DG,SS,T,X | Standard | Display host capability'sine göre | Live/Recreate | Auto varsayılan; 60/120 Hz davranışı Vita timing'ini hızlandırmamalı |
-| `graphics.anisotropicFiltering` | `anisotropic-filtering` | G,DG,SS,T,X | Standard | Max AF capability'sine göre | Live | İzinli değerler 1/2/4/8/16 |
-| `graphics.asyncPipelineCompilation` | `async-pipeline-compilation` | G,DG,SS,T,X | Standard | Thread-safe compiler varsa Cap | Live | Stutter azaltabilir; geçici grafik hatası uyarısı |
-| `graphics.shaderCache` | `shader-cache` | G,DG,SS,T | Standard | Her zaman | Boot | Cache sürüm/commit uyumu Faz 5 ve 11'e tabidir |
-| `graphics.textureCache` | `texture-cache` | G,DG,SS,T | Standard | Her zaman | Boot | RAM/VRAM maliyeti açıklanır |
-| `graphics.directSpirv` | `spirv-shader` | — | Developer | Vulkan iOS yolunda anlamı doğrulanana kadar Hidden | Recreate | OpenGL'e özgü davranış iOS'a taşınmaz |
-| `graphics.fpsHack` | `fps-hack` | G,DG,T,X | Advanced | Direct title çalışırken | Live | Bazı 30 FPS oyunları 60'a çıkarabilir, oyunu 2x hızlandırabilir; SS'de varsayılan yasak |
-| `textures.replacementsEnabled` | `import-textures` | G,DG,T,X | Advanced | Texture klasörü hazırsa | Live | Security-scoped dış yol tutulmaz; app storage'a import edilir |
-| `textures.exportEnabled` | `export-textures` | G,DG,T,X | Developer | Yazılabilir alan varsa | Live | Storage kotası ve kullanıcı onayı gerekir |
-| `textures.exportFormat` | `export-as-png` | G,DG,T | Developer | Export açıksa | Live | PNG/DDS kararlı enum'una çevrilir |
-| `graphics.hashlessTextureCache` | `hashless-texture-cache` | — | Developer | Kullanıldığı kanıtlanana kadar Hidden | Boot | Upstream anahtarın gerçekten tüketildiği sürüm bazında denetlenir |
-| `display.scalingMode` | `stretch_the_display_area`, `fullscreen_hd_res_pixel_perfect` | G,DG,SS,T,X | Standard | Her zaman | Live | iOS değerleri Aspect Fit varsayılan, Fill/Crop ve ölçülürse Integer; iki desktop bool'u bridge map eder |
-| `display.fileLoadingDelay` | `file-loading-delay` | G,DG,T | Advanced | Her zaman | Boot | 0–30 aralığı; yalnız belirli timing sorunu yaşayan oyunlar |
-| `display.shaderCompileNotice` | `show-compile-shaders` | G,DG,SS,T | Standard | Pipeline counter varsa | Live | Native, kısa ve touch engellemeyen bildirim |
-| `display.screenshotFormat` | `screenshot-format` | H | Standard | App screenshot özelliği varsa | Live | None/JPEG/PNG; Files export atomik yapılır |
-
-### 5.3 Ses, sistem, kamera ve ağ
-
-| vita3kios key | Upstream anahtarı | Scope | Seviye | Görünürlük | Uygulama | Not |
-| --- | --- | --- | --- | --- | --- | --- |
-| `audio.backend` | `audio-backend` | — | — | Hidden; iOS native host sabit | Recreate | SDL/Cubeb seçimi sunulmaz |
-| `audio.volume` | `audio-volume` | G,DG,SS,T,X | Standard | Her zaman | Live | 0–100 |
-| `audio.ngsEnabled` | `ngs-enable` | G,DG,SS,T | Advanced | NGS core derlendiyse Cap | Boot | Uyumluluk etkisi açıklanır |
-| `audio.bufferDuration` | — | G,DG,SS,T | Advanced | Audio host destekliyorsa | Recreate | İzinli değerler cihaz ölçümünden gelir; keyfi milisaniye girişi yok |
-| `audio.mixWithOthers` | — | H | Standard | AVAudioSession capability'si | Live/Recreate | Route/interruption davranışıyla test edilir |
-| `system.pstvMode` | `pstv-mode` | G,DG,SS,T | Advanced | İlgili title/system app için | Boot | Emüle edilen donanım davranışını değiştirir |
-| `system.confirmButton` | `sys-button` | G,DG,SS,T | Standard | Her zaman | Boot | Cross/Circle; bazı uygulamalar yok sayabilir |
-| `system.language` | `sys-lang` | G,DG,SS,T | Standard | Destekli SCE dil listesi | Boot | UI diliyle karıştırılmaz |
-| `system.dateFormat` | `sys-date-format` | G,DG,SS,T | Standard | Her zaman | Boot | YYYY/MM/DD, DD/MM/YYYY, MM/DD/YYYY |
-| `system.timeFormat` | `sys-time-format` | G,DG,SS,T | Standard | Her zaman | Boot | 12/24 saat |
-| `system.imeLanguages` | `ime-langs` | G,DG,SS,T | Advanced | IME uygulanmışsa Cap | Boot | En az bir dil kalmalı |
-| `system.showMode` | `show-mode` | G,SS | Developer | System capability varsa | Boot | Normal oyun ayarı değildir |
-| `system.demoMode` | `demo-mode` | G,SS | Developer | System capability varsa | Boot | System Software güvenli preset'inde kapalı |
-| `camera.front.source` | `front-camera-type/id/image/color` | G,T | Advanced | İzin + camera capability | Boot | None/Device/Static Image/Solid Color; bookmark yerine app storage |
-| `camera.back.source` | `back-camera-type/id/image/color` | G,T | Advanced | İzin + camera capability | Boot | İzin yalnız title gerçekten isterse sorulur |
-| `motion.enabled` | ters anlamlı `disable-motion` | G,DG,SS,T,X | Standard | CoreMotion varsa | Live | Bridge negasyonu tek yerde yapar |
-| `network.httpEnabled` | `http-enable` | G,DG,SS,T | Advanced | Network core derlendiyse Cap | Boot | Dış ağ davranışı kullanıcıya açıklanır |
-| `network.psnPresenceOffline` | `psn-signed-in` | G,DG,SS,T | Advanced | NP emülasyonu varsa | Boot | Gerçek PSN login değildir; açıkça "offline taklit" denir |
-| `network.httpTimeoutAttempts` | `http-timeout-attempts` | G,DG,SS,T | Developer | HTTP açıksa | Boot | Range descriptor'dan gelir |
-| `network.httpTimeoutSleepMs` | `http-timeout-sleep-ms` | G,DG,SS,T | Developer | HTTP açıksa | Boot | Aşırı değer reddedilir |
-| `network.httpReadEndAttempts` | `http-read-end-attempts` | G,DG,SS,T | Developer | HTTP açıksa | Boot | Kararlılık uyarısı |
-| `network.httpReadEndSleepMs` | `http-read-end-sleep-ms` | G,DG,SS,T | Developer | HTTP açıksa | Boot | Kararlılık uyarısı |
-| `network.adhocAddress` | `adhoc-addr` | G,DG,SS,T | Developer | Uygun interface varsa | Boot | Interface index'i kalıcı kimlik olarak saklanmaz |
-
-### 5.4 Kontroller ve native host ayarları
-
-| vita3kios key | Upstream anahtarı | Scope | Seviye | Görünürlük | Uygulama | Not |
-| --- | --- | --- | --- | --- | --- | --- |
-| `input.controllerProfile` | `controller-binds`, `controller-axis-binds` | G,DG,SS,T | Standard | GameController varsa | Live | Kararlı Vita action kimlikleri kullanılır; SDL index'i kalıcı kimlik değildir |
-| `input.analogMultiplier` | `controller-analog-multiplier` | G,DG,SS,T,X | Advanced | Her zaman | Live | Range capability/schema ile sınırlanır |
-| `input.deadzone.left/right` | — | G,DG,SS,T,X | Standard | Analog kontrol varsa | Live | Ayrı stick değerleri ve canlı preview |
-| `touch.enabled` | — | G,DG,SS,T,X | Standard | Touch cihazda | Live | Fiziksel controller bağlanınca auto-hide ayrı tercih olabilir |
-| `touch.layoutID` | — | G,DG,SS,T | Standard | Her zaman | Live | Portrait/landscape ve sol/sağ el varyantı; koordinatlar normalize saklanır |
-| `touch.opacity` | — | G,DG,SS,T,X | Standard | Touch açıkken | Live | Görünür kontrol alt sınırı validation ile korunur |
-| `touch.scale` | — | G,DG,SS,T,X | Standard | Touch açıkken | Live | Safe-area dışına taşıyan değer normalize edilmez; editörde hata gösterilir |
-| `touch.rearPanelMode` | — | G,DG,SS,T | Advanced | Rear touch kullanan title için | Live | Görünür bölgeler veya öğretilebilir gesture |
-| `motion.sensitivity` | — | G,DG,SS,T,X | Advanced | CoreMotion varsa | Live | Orientation dönüşümü host katmanında |
-| `haptics.enabled` | — | G,DG,SS,T,X | Standard | Core/Controller haptics varsa | Live | Cihaz ve controller capability'sine göre |
-| `lifecycle.pauseOnBackground` | — | H | Standard | Her zaman | Live | Kapatma seçeneği sunulsa bile iOS kaynak kaybında core güvenli pause edebilir |
-
-Upstream fiziksel klavye binding anahtarları iPhone odaklı ilk UI'da
-gösterilmeyecektir. iPad keyboard desteği Faz 7/13'te doğrulanırsa ayrı native
-action mapping descriptor'ları eklenir; masaüstü key-code dizileri olduğu gibi
-taşınmaz.
-
-### 5.5 HUD, log ve developer ayarları
-
-| vita3kios key | Upstream anahtarı | Scope | Seviye | Görünürlük | Uygulama | Not |
-| --- | --- | --- | --- | --- | --- | --- |
-| `hud.preset` | `performance-overlay`, `performance-overlay-detail` | G,DG,SS,T,X | Standard | Metrics API varsa | Live | Off/Compact/Standard/Detailed; farklı seçim yapılırsa Custom |
-| `hud.position` | `performance-overlay-position` | G,DG,SS,T,X | Advanced | Her zaman | Live | Default Top Right; altı pozisyon desteklenebilir |
-| `hud.opacity` | — | G,DG,SS,T,X | Advanced | HUD açıksa | Live | Önerilen range 0.35–0.90; erişilebilir minimum kontrast korunur |
-| `hud.scale` | — | G,DG,SS,T,X | Advanced | HUD açıksa | Live | Önerilen range 0.75–1.50; Compact default yaklaşık 11 pt |
-| `hud.updateRateHz` | — | G,DG,SS,T,X | Advanced | HUD açıksa | Live | Varsayılan 4 Hz; izinli seçenek 1/2/4, 10 Hz yalnız diagnostic |
-| `hud.metricSelection` | — | G,DG,SS,T,X | Advanced | Metric capability mask'e göre | Live | Unsupported metric seçimi persist edilse bile çizilmez; UI nedenini gösterir |
-| `hud.includeInAppScreenshot` | — | G,DG,SS,T | Advanced | App screenshot compositor destekliyorsa | Live | iOS sistem screen recording için garanti verilmez |
-| `logging.level` | `log-level` | G | Developer | Her zaman | Live/Boot | Bridge live logger level desteklemiyorsa Boot |
-| `logging.archivePerTitle` | `archive-log` | G,DG,SS,T | Advanced | Log sistemi varsa | Boot | Hassas yol ve lisans verisi redaction'a tabi |
-| `logging.compatWarnings` | `log-compat-warn` | G | Developer | Compat DB varsa | Live | Normal kullanıcı uyarılarıyla karıştırılmaz |
-| `logging.activeShaders` | `log-active-shaders` | G,DG,SS,T | Developer | Debug build/capability | Boot | Log boyutu uyarısı |
-| `logging.uniforms` | `log-uniforms` | G,DG,SS,T | Developer | Debug build/capability | Boot | Yüksek hacim uyarısı |
-| `logging.colorSurfaces` | `color-surface-debug` | G,DG,SS,T | Developer | Debug build/capability | Boot | Büyük storage tüketimi uyarısı |
-| `debug.validationLayer` | `validation-layer` | G,DG,SS,T | Developer | Validation layer paketliyse | Recreate | Release flavor'da gizlenebilir |
-| `debug.gdbStub` | `gdbstub` | G | Developer | Debug build | Host | Port/izin/saldırı yüzeyi nedeniyle release'te kapalı |
-| `debug.waitForDebugger` | `wait-for-debugger` | G | Developer | Debug build | Host | Timeout/cancel yolu zorunlu |
-| `debug.tracyPrimitive` | `tracy-primitive-impl` | G,DG,SS,T | Developer | Tracy build | Recreate | Çok büyük trace/RAM uyarısı |
-| `debug.tracyModules` | `tracy-advanced-profiling-modules` | G,DG,SS,T | Developer | Tracy build | Recreate | Upstream custom XML bu alanları henüz round-trip etmiyor; bridge extension gerekir |
-
-iOS native HUD çizilirken upstream core overlay'i kapalı tutulacaktır; aksi halde
-iki overlay aynı anda çizilebilir. Upstream `performance-overlay*` alanları
-import sırasında native `hud.*` profiline dönüştürülebilir, fakat yeni UI'nın
-tek gerçek kaynağı native profile store olacaktır.
-
-### 5.6 Raw ayar olarak sunulmayacak upstream alanları
-
-Aşağıdaki alanlar unutulmuş değildir; native ürün davranışına dönüştürülecek
-veya internal tutulacaktır:
-
-| Upstream anahtarı | iOS davranışı |
-| --- | --- |
-| `initial-setup`, `show-welcome`, `warn-missing-firmware` | Native onboarding/readiness state'i; kullanıcıya raw toggle olarak gösterilmez |
-| `apps-list-grid` | SwiftUI library görünüm tercihi olarak host store'da tutulur |
-| `boot-apps-full-screen` | iOS game orientation/session presentation politikasıyla değiştirilir |
-| `show-live-area-screen` | Direct Game/System Software mode seçimiyle karıştırılmaz; authentic shell olmayan imitation gerçek OS diye sunulmaz |
-| `delay-background`, `delay-start`, `background-alpha` | Masaüstü precompile UI ayarları; native progress tasarımına taşınmaz |
-| `pref-path` | Sandbox path resolver yönetir; mutlak container yolu profil ayarı olmaz |
-| `discord-rich-presence` | İlk iOS kapsamında yoktur |
-| `check-for-updates`, `check-for-updates-mode` | Dağıtım flavor'ına uygun native update davranışı; sideload/Store kararından önce açılmaz |
-| `user-id`, `user-auto-connect` | Native user management akışı; ID raw text field olmaz |
-| `user-lang` | Native vita3kios UI diliyle değil, upstream Qt UI diliyle ilgilidir; iOS'ta kullanılmaz |
-| `current-ime-lang` | IME runtime state'idir; kalıcı kullanıcı ayarı olarak düzenlenmez |
-| `controller-led-color` | Controller capability doğrulanırsa native controller profile ayrıntısı olur |
-| `keyboard-*` | iPad native action mapping uygulanana kadar gizlidir; masaüstü key code'u doğrudan taşınmaz |
-| `turbo-mode`, `custom-driver-name` | Android/Adreno yolu; iOS'ta gizlidir |
-| `fullscreen_hd_res_pixel_perfect` | Desktop fullscreen bool'u doğrudan gösterilmez; `display.scalingMode` içine map edilir |
-
-İleride bu alanlardan biri işlev kazanırsa descriptor, capability ve migration
-testi eklenmeden UI'ya çıkarılmaz.
+The upstream overlay is disabled while the native HUD is active. Desktop
+onboarding, update checks, preferred path, Discord presence, raw user IDs,
+Android settings, and raw keyboard codes are internal, replaced, or unsupported.
 
 ## 6. Versioned C ABI
 
-### 6.1 Genel ABI kuralları
-
-- Public header yalnız C99 uyumlu POD tipleri kullanacaktır.
-- Her genişletilebilir struct ilk alanlarında `struct_size` ve `abi_version`
-  taşıyacaktır.
-- C ABI sürümü, settings schema sürümü ve profile-store format sürümü üç ayrı
-  sayıdır. Birinin artması diğerlerinin otomatik arttığı anlamına gelmez.
-- Enum'ların underlying tipi sabit genişlikli olacaktır.
-- Swift ve core arasında heap ownership geçirilmez. Değişken uzunluklu veri için
-  caller-owned buffer/two-call size sorgusu veya kopyalayan callback kullanılır.
-- String'ler UTF-8'dir; pointer ömrü çağrı sonrasına taşmaz.
-- Tüm fonksiyonlar tipli sonuç kodu döndürür; C++ exception ABI dışına çıkmaz.
-- Ayar commit'i ve core lifecycle aynı serial emulation queue üzerinde sıralanır.
-- UI/render/audio thread'i disk I/O veya schema serialization ile bloklanmaz.
-
-### 6.2 Önerilen tipler
-
-İsimler uygulamada kısaltılabilir; davranış korunmalıdır.
+- Public headers use C99-compatible POD types.
+- Extensible structures begin with `struct_size` and `abi_version`.
+- ABI, settings schema, and store format versions are independent.
+- Swift and C++ never exchange heap ownership. Variable data uses caller-owned
+  buffers and two-call sizing or copying callbacks.
+- Strings are UTF-8 and pointers do not outlive a call.
+- Every function returns a typed result; exceptions never cross the ABI.
+- Settings commits and lifecycle operations share the serial emulation queue.
+- UI, render, and audio threads never perform profile disk I/O.
 
 ```c
 typedef uint64_t v3kios_core_handle_t;
@@ -404,244 +243,68 @@ typedef struct v3kios_setting_descriptor_v1 {
     uint32_t apply_requirement;
     uint32_t risk;
     uint64_t capability_mask;
-    /* Stable key, localization keys, default/domain and dependency data
-       caller-owned output buffers through separate copy functions. */
 } v3kios_setting_descriptor_v1;
 ```
 
-`v3kios_setting_value_v1` tagged union olacaktır. Boolean için integer veya
-string kullanmak, enum'u yerelleştirilmiş metin olarak göndermek yasaktır.
+Values use a tagged union. The bridge supplies descriptor enumeration, typed
+get/set, effective resolution, transaction begin/set/unset/validate/commit/cancel,
+category/profile reset, and capability-domain queries.
 
-### 6.3 Gerekli settings çağrıları
+Results distinguish type/range errors, unsupported capabilities, invalid scopes,
+cross-field conflicts, safety warnings, live changes, next-boot changes,
+recreation, host restart, and recovery. Transactions are atomic.
 
-Bridge en az şu işlemleri sağlamalıdır:
+Capabilities include option domains: filters, resolution range/step, memory
+mapping modes, audio buffers, controller features, GPU timestamps, screenshot
+composition, and Developer features. Cache identity includes core build,
+device/OS, firmware inventory, and session kind.
 
-```text
-settings_get_schema_version
-settings_get_descriptor_count
-settings_copy_descriptor(index)
-settings_copy_enum_choices(key, capabilityContext)
-settings_get_override(scope, profileID, key)
-settings_get_effective(sessionDescriptor, key)
-settings_transaction_begin(scope, profileID)
-settings_transaction_set(txn, key, typedValue)
-settings_transaction_unset(txn, key)
-settings_transaction_validate(txn)
-settings_transaction_commit(txn)
-settings_transaction_cancel(txn)
-settings_reset_category(scope, profileID, category)
-settings_reset_profile(scope, profileID)
-```
+## 7. Validation, migration, and persistence
 
-`validate` ve `commit` sonuçları şunları ayırmalıdır:
+Validation order is descriptor/version, type, domain, scope, capability,
+dependencies, cross-field rules, risk acknowledgement, and apply planning.
+Values are rejected rather than silently clamped unless the descriptor explicitly
+defines layout normalization.
 
-- Tip/range/domain hataları
-- Unsupported capability
-- Scope'a izin verilmeyen anahtar
-- Cross-field çakışması
-- Güvenlik veya compatibility uyarısı
-- Canlı uygulanmış anahtarlar
-- Next-boot anahtarları
-- Session recreate isteyen anahtarlar
-- Host restart isteyen anahtarlar
-- Disk persistence/recovery sonucu
+The native store records format/schema version, core commit, scope identity,
+timestamps, and sparse values. It never stores absolute sandbox paths, import
+bookmarks, license material, or firmware/game content.
 
-Commit tamamen atomik olacaktır. Aynı transaction içindeki üç ayardan biri
-geçersizse diğer ikisi kalıcılaştırılmaz.
+Writes use a temporary file, flush, atomic replacement, and last-known-good copy.
+Startup validates structure and identity. Corruption falls back with a typed,
+nonfatal error. One actor/queue serializes writers.
 
-### 6.4 Capability modeli
+Every format change has fixture-based migration tests. Unknown newer keys are
+preserved when safe or produce explicit incompatibility. Removed capabilities
+retain values but mark them unsupported. Migration logs contain keys and result
+codes, not values. Every upstream pin change requires a config inventory diff.
 
-Capability sonucu yalnız kaba bir bitmask olmamalı; option domain'ini de
-daraltabilmelidir. Örnekler:
+## 8. SwiftUI information architecture
 
-- Desteklenen screen filter listesi
-- Resolution scale alt/üst sınırı ve adımı
-- Desteklenen memory mapping yöntemleri
-- GPU timestamp query ve timestamp period
-- Audio buffer süreleri
-- JIT durumu ve hazırlık gereksinimi
-- Camera/motion/haptics varlığı
-- Metrics alanlarının validity desteği
-- Runtime apply veya recreate gereksinimi
+Main Settings opens Global/Host. Game detail opens Title. System Software
+readiness opens its mode profile. Pause exposes the active profile and safe live
+controls. Recreate changes offer Apply on Next Boot or Restart Now.
 
-Capability cihaz, OS, app flavor, upstream commit ve aktif renderer'a bağlıdır.
-Eski capability sonucu yeni session için cache'lenip körlemesine kullanılmaz.
+iPhone uses `NavigationStack`; iPad uses `NavigationSplitView`. The layout shows
+profile summary, search, Standard/Advanced selector, readiness, categories,
+changed-only filter, reset/export, and Developer/Logging when enabled. Categories
+cover System/Firmware, Core/CPU/JIT, GPU/Renderer, Display, Audio, Input, Touch,
+Motion, Camera/Microphone, Network, Storage/Cache, Compatibility, HUD, and logs.
 
-## 7. Validation, migration ve kalıcılık
+Rows show title, effective value, source, override, explanation, apply/risk badges,
+and unsupported reason. Sliders snap to descriptor steps. Risky enablement needs
+one confirmation; disablement does not. Search respects visibility boundaries.
+Developer keys do not leak while Developer Mode is off.
 
-### 7.1 Validation sırası
+Dynamic Type must preserve meaning. VoiceOver announces title, value, source,
+risk, and apply behavior. Color is never the only cue. Reduce Motion limits
+profile and graph animations. User-facing project strings are English at this
+stage; future localization must not change stable keys.
 
-Her transaction şu sırayla doğrulanacaktır:
+## 9. Metrics contract
 
-1. Anahtar ve schema sürümü
-2. Tip ve UTF-8 doğruluğu
-3. Range, step veya enum domain'i
-4. Scope izni
-5. Runtime capability
-6. Cross-field bağımlılıkları
-7. System Software güvenli preset politikası
-8. Storage/permission gereksinimi
-9. Risk uyarısı ve gereken kullanıcı onayı
-
-Örnek zorunlu kontroller:
-
-- AF yalnız 1/2/4/8/16 ve cihaz maksimumunun altında olabilir.
-- Resolution scale descriptor adımına oturmalı ve cihaz limitini geçmemelidir.
-- LLE module seçimi kurulu firmware inventory'sinde bulunmalıdır.
-- Manual module listesi boşsa açık uyarı gerekir.
-- Memory mapping yalnız runtime mask'ta bulunan yöntem olabilir.
-- Seçilen filter renderer tarafından desteklenmelidir.
-- Texture export formatı export kapalıyken etkisiz olarak işaretlenir.
-- IME listesi destek aktifse boş bırakılamaz.
-- Touch elemanları normalize viewport ve safe area içinde kalmalıdır.
-- HUD update rate üst sınırı render-thread callback hızına dönüştürülmemelidir.
-- System Software profilinde FPS hack varsayılan olarak reddedilir; yalnız açık
-  Advanced onayı ve test capability'siyle uygulanabilir.
-
-Normal kullanıcı değişikliği sessizce clamp edilmez. UI geçerli aralığı gösterir
-ve core geçersiz değeri tipli hatayla reddeder. Yalnız migration sırasında artık
-desteklenmeyen eski değer güvenli fallback'e alınabilir; bu olay migration
-raporuna yazılır.
-
-### 7.2 Profile store
-
-Profile store sparse override'ların kanonik kaynağıdır. Fiziksel encoding için
-ayrı ADR yazılabilir; aşağıdaki davranış değişmez:
-
-- `schemaVersion`, oluşturucu app/core sürümü ve son migration sürümü saklanır.
-- Built-in default'lar dosyaya kopyalanmaz.
-- Global, iki mode profili, title map'i ve host tercihleri birbirinden ayrılır.
-- Session override diske girmez.
-- Title kimliğinde mutlak app-container yolu bulunmaz.
-- Bilinmeyen daha yeni anahtarlar mümkünse kayıpsız korunur.
-- Secret, zRIF, pairing file, certificate, firmware/game yolu ve security-scoped
-  bookmark bu store'a konmaz.
-
-Upstream `config.yml` ve `config_<app_path>.xml` için bridge adapter'ı bulunur.
-İlk import sırasında tanınan global/custom alanlar sparse modele dönüştürülür.
-Upstream formatı değiştirilirse migration test edilmeden yeni pin kabul edilmez.
-Bridge'in ürettiği runtime `Config` bir türetilmiş değer sayılır; Swift'in ikinci
-bir config gerçeği oluşturmasına izin verilmez.
-
-### 7.3 Atomik yazım ve kurtarma
-
-Kalıcılık tek writer queue üzerinden yürür:
-
-1. Yeni içerik aynı dizinde benzersiz temp dosyaya yazılır.
-2. Dosya flush/fsync edilir.
-3. Temp dosya yeniden parse edilerek schema doğrulanır.
-4. Mevcut son-geçerli sürüm `.bak` olarak korunur.
-5. Temp dosya atomik rename ile asıl dosyanın yerine geçer.
-6. Desteklenen platformda parent directory fsync edilir.
-7. Commit sonucu ancak bundan sonra başarı döner.
-
-Açılışta asıl dosya bozuksa `.bak` denenir. Backup da bozuksa built-in/global
-güvenli değerlerle boot devam eder, bozuk dosyalar tanı için yeniden adlandırılır
-ve kullanıcıya non-blocking uyarı gösterilir. Bozuk config oyun veya system
-shell boot'unu sonsuz crash döngüsüne sokmamalıdır.
-
-### 7.4 Migration ilkeleri
-
-- Migration `N -> N+1` küçük, tekrar çalıştırılabilir adımlardan oluşur.
-- Her adım eski fixture, beklenen yeni çıktı ve downgrade davranışıyla test edilir.
-- Rename edilen anahtarın eski adı yalnız migration'da kabul edilir; UI iki
-  anahtarı aynı anda yazmaz.
-- Kaldırılan capability değeri override store'da audit için korunabilir, fakat
-  effective profile güvenli fallback kullanır ve UI `Artık desteklenmiyor` der.
-- Upstream pin değişiminde config diff envanteri Faz 15 sync checklist'ine girer.
-- Migration log'u değerleri değil anahtar ve sonuç kodlarını içermelidir; hassas
-  kullanıcı verisi loglanmaz.
-
-## 8. SwiftUI bilgi mimarisi
-
-### 8.1 Giriş noktaları
-
-- Ana Settings ekranı global/host ayarlarına açılır.
-- Library game detail içindeki `Settings`, doğrudan ilgili title scope'una açılır.
-- System Software readiness/boot ekranındaki `Settings`, `systemSoftware` mode
-  profiline açılır.
-- Pause overlay içindeki `Settings`, aktif profile ve yalnız güvenli live ayarlara
-  hızlı erişim verir. Recreate isteyen değişiklik yapılırsa `Şimdi yeniden başlat`
-  veya `Sonraki açılışta uygula` sonucu gösterilir.
-
-### 8.2 Navigasyon
-
-iPhone `NavigationStack`, iPad `NavigationSplitView` kullanır. Settings ana
-ekranı şu sırada görünür:
-
-1. Aktif scope/profile başlığı
-2. Arama
-3. `Basic / Advanced` görünüm seçimi
-4. Readiness özetleri: firmware, JIT, renderer/audio capability
-5. Kategoriler
-6. Yalnız değiştirilmiş ayarları gösterme
-7. Profil reset/export işlemleri
-8. Developer Mode etkinse Developer/Logging
-
-Kategori sırası roadmap ile aynıdır:
-
-- System/Firmware
-- Core/CPU/JIT
-- GPU/Renderer
-- Display/Frame Pacing
-- Audio
-- Input/Controller
-- Touch
-- Motion
-- Camera/Microphone
-- Network
-- Storage/Cache
-- Compatibility
-- Performance HUD
-- Developer/Logging
-
-### 8.3 Ayar satırı
-
-Her satır en az şunları gösterir:
-
-- Yerelleştirilmiş başlık
-- Etkili değer
-- Değer kaynağı: Built-in, Global, Direct Game, System Software, Title veya Session
-- `Override` durumu ve `Globali/Üst Profili Kullan` işlemi
-- Kısa açıklama
-- Gerekirse `Advanced`, `Compatibility`, `Developer`, `Restart` rozeti
-- Unsupported ise kısa neden ve ayrıntı ekranı
-
-Slider, keyfi hassasiyete sahipmiş gibi gösterilmeyecek; descriptor adımıyla
-snap edecektir. Uzun enum veya module listesi ayrı seçim sayfası açacaktır.
-Riskli toggle açılmadan önce sonucu anlatan tek onay gösterilir. Aynı değeri
-kapatmak için tekrar onay istenmez.
-
-### 8.4 Basic, Advanced ve Developer
-
-- Basic görünüm performans/kalite, ses, kontrol, sistem dili ve HUD gibi güvenli
-  günlük ayarları içerir.
-- Advanced görünüm module policy, memory mapping, accuracy, surface sync, FPS
-  hack, texture replacement ve network timing gibi uyumluluk seçeneklerini açar.
-- Developer Mode ayrı ve kalıcı bir host tercihidir. İlk açılışta log boyutu,
-  performans ve kararlılık etkisi açıklanır. Release flavor capability sunmuyorsa
-  ilgili developer satırları hiç oluşturulmaz.
-- Arama görünürlük sınırını aşmaz; Developer Mode kapalıyken gizli developer
-  anahtarını sonuçlarda sızdırmaz.
-
-### 8.5 Erişilebilirlik ve yerelleştirme
-
-- Kullanıcı metinleri descriptor localization key'lerinden Türkçe ve İngilizce
-  tablolara çözülür; stable key gösterilmez.
-- Dynamic Type satırları kırpmamalı; value/detail alt satıra geçebilmelidir.
-- VoiceOver başlık, etkili değer, kaynak, risk ve apply gereksinimini tek anlamlı
-  label/hint olarak okumalıdır.
-- Sadece renkle override veya risk anlatılmamalıdır.
-- Controller/keyboard focus sırası kategori düzeniyle aynı olmalıdır.
-- Reduce Motion, scope değişim animasyonlarını ve HUD graph animasyonunu azaltır.
-
-## 9. Metrics veri sözleşmesi
-
-### 9.1 Snapshot yapısı
-
-Core, preallocated/double-buffered bir snapshot yayınlayacaktır. SwiftUI render
-veya emulation thread'inden callback almayacak; kendi 2–4 Hz zamanlayıcısında son
-snapshot'ı kopyalayacaktır.
+The core publishes a preallocated, double-buffered snapshot. SwiftUI copies the
+latest snapshot on its own 2-4 Hz timer and receives no per-frame callbacks.
 
 ```c
 typedef struct v3kios_metrics_snapshot_v1 {
@@ -653,7 +316,6 @@ typedef struct v3kios_metrics_snapshot_v1 {
     uint64_t validity_mask;
     uint32_t session_kind;
     uint32_t run_state;
-
     double guest_fps;
     double present_fps;
     double guest_frame_interval_ema_ms;
@@ -662,7 +324,6 @@ typedef struct v3kios_metrics_snapshot_v1 {
     double one_percent_low_fps;
     double cpu_frame_time_ms;
     double gpu_frame_time_ms;
-
     uint64_t resident_memory_bytes;
     uint64_t jit_cache_bytes;
     uint64_t jit_compiled_blocks;
@@ -675,263 +336,105 @@ typedef struct v3kios_metrics_snapshot_v1 {
 } v3kios_metrics_snapshot_v1;
 ```
 
-Alan isimleri ilk ABI uygulanırken değişebilir; `struct_size`, version, validity,
-session, monotonic timestamp ve aşağıdaki semantik tanımlar değişmemelidir.
-Her session boot/restart ve shell/title geçişinde `sample_epoch` artar. UI farklı
-epoch örneklerini aynı rolling grafik içinde birleştirmez.
+Every boot/restart and shell/title transition increments `sample_epoch`.
 
-### 9.2 Gerçek ölçüm tanımları
+| Metric | Required meaning |
+| --- | --- |
+| Guest FPS | Accepted guest display events / nonpaused monotonic time |
+| Present FPS | Successful host presents / monotonic time |
+| Guest frame interval | Difference between guest-frame timestamps |
+| Rolling average | Guest frames / actual elapsed window time |
+| 1% low FPS | `1000 / p99_frame_interval_ms` over enough samples |
+| CPU frame time | Documented instrumented core critical path |
+| GPU frame time | Valid Vulkan timestamp query interval |
+| Resident memory | Process footprint/RSS from supported public iOS API |
+| Thermal state | Native semantic state, never fake temperature |
+| Audio underrun | PCM ring could not satisfy callback demand |
+| Pipeline compile | Monotonic completed compilation count |
+| JIT cache/blocks | Values directly reported by Dynarmic adapter |
+| Resolution | Guest framebuffer, scale, and host drawable kept distinct |
+| Emulation speed | Guest virtual-time progress / nonpaused wall time |
 
-| Metric | Bağlayıcı tanım | İlk kaynak | Geçerlilik koşulu |
-| --- | --- | --- | --- |
-| Guest FPS | Kabul edilmiş guest `sceDisplaySetFrameBuf` olay sayısı / pause hariç monotonic elapsed time | SceDisplay hook | En az iki frame ve pozitif pencere |
-| Present FPS | Başarılı host present submission/completion sayısı / monotonic elapsed time | Vulkan/MoltenVK present sınırı | Present hook doğrulanmış olmalı |
-| Guest frame interval | Ardışık guest-frame timestamp farkı; Compact için EMA, Detailed için dağılım | Preallocated timestamp ring | Pause/epoch sınırı karıştırılmaz |
-| Rolling average FPS | Son 10 s veya descriptor'daki pencere boyunca toplam guest frame / gerçek elapsed | Timestamp ring | Yeterli zaman örneği |
-| 1% low FPS | Aynı rolling penceredeki frame interval'ların 99. yüzdeliğinin tersi `1000 / p99_ms` | Timestamp ring | En az 10 s ve yeterli frame; aksi halde invalid |
-| CPU frame time | Açıkça tanımlanan emulation/render-preparation critical path'in ölçülen wall süresi | Core instrumentation | Başlangıç/bitiş noktaları aynı sürümde doğrulanmış |
-| GPU frame time | Vulkan timestamp query ile emüle render workload başlangıç/bitiş farkı | Vulkan query pool | Queue timestamp desteği ve geçerli query sonucu |
-| Resident memory | Uygulama process'inin desteklenen public iOS mekanizmasıyla ölçülen physical footprint/RSS | PlatformIOS | API destekli ve okuma başarılı |
-| Thermal state | iOS `ProcessInfo` nominal/fair/serious/critical durumu | PlatformIOS | Her zaman veya host capability |
-| Audio underrun | Output callback'in istediği frame sayısını PCM ring buffer sağlayamadığında monotonic sayaç artışı | iOS audio host | Audio session aktif |
-| Pipeline compile | Başarıyla tamamlanan pipeline/shader compilation için monotonic total ve sample delta | Vulkan renderer | Counter reset yerine monotonic tutulmalı |
-| JIT cache/blocks | Dynarmic'in doğrudan raporladığı byte/block sayısı | Dynarmic adapter | Core gerçek API sağlıyorsa |
-| Resolution | Guest framebuffer boyutu, resolution multiplier ve host drawable ayrı alanlar | Display/renderer | Frame/surface hazır |
-| Emulation speed | Guest virtual time ilerlemesi / pause hariç wall time, açık nominal hedefle | Gelecek timing instrumentation | Vblank thread sayımı tek başına yeterli değildir |
+`1000 / FPS` is not CPU or GPU time. Utilization is not inferred from frame time.
+JIT is not active merely because executable memory was allocated. Invalid metrics
+clear their validity bit and stale values disappear.
 
-`ms/frame = 1000/FPS` yalnız FPS'in cebirsel tersidir; CPU veya GPU süresi diye
-etiketlenmez. Compact `frame ms`, timestamp ring'den gelen guest frame interval
-EMA'sıdır.
+Hooks only update atomics or a preallocated ring. They do no allocation,
+formatting, disk I/O, or Swift callbacks. Monotonic time excludes pause and
+background duration. Before the first frame, FPS is invalid rather than zero.
 
-### 9.3 Unsupported metrics ilkesi
+## 10. HUD contract
 
-- GPU utilization, GPU timestamp süresinden türetilmez. Gerçek utilization API'si
-  yoksa alan invalid kalır.
-- CPU utilization, CPU frame time'dan türetilmez. Gerçek process/thread CPU
-  sampler'ı doğrulanmadan yüzde gösterilmez.
-- Emulation speed, 60 Hz çalışan bağımsız vblank thread'inin tick oranıyla
-  tahmin edilmez.
-- JIT aktifliği executable memory ayrılabildi varsayımıyla gösterilmez; JIT
-  adapter'ın doğrulanmış çalışma durumu gerekir.
-- Thermal state numeric sıcaklığa çevrilmez; iOS'un semantik state'i gösterilir.
-- Bir metric runtime'da geçersizleşirse son değer sonsuza kadar tutulmaz.
-  Validity kaldırılır ve UI alanı `—` yapar veya gizler.
-- Detailed/Custom preset bir unsupported metric isterse UI nedenini gösterir;
-  `0`, `N/A 0%` veya sahte normal değer çizmez.
+| Preset | Contents |
+| --- | --- |
+| Off | No HUD; expensive collection stops without another consumer |
+| Compact | Guest FPS and guest frame-interval EMA |
+| Standard | Guest/present FPS, rolling average, and 1% low |
+| Detailed | Standard plus every valid advanced metric and pacing graph |
+| Custom | Capability-filtered user selection |
 
-### 9.4 Threading ve örnekleme
+Defaults are Compact, Top Right, 4 Hz, scale 1.0. Compact normally renders as
+`59.9 FPS · 16.7 ms` in a small translucent capsule with monospaced digits.
 
-- Frame, present ve audio event hook'ları yalnız atomik sayaç/timestamp ring'e
-  yazar; formatlama, sorting, disk veya Swift callback yapmaz.
-- Ring buffer önceden ayrılır. Emülasyon sırasında per-frame heap allocation
-  yapılmaz.
-- Aggregator varsayılan 4 Hz snapshot üretir. Detailed ağır metric'ler 2 Hz
-  alt-publisher kullanabilir.
-- UI snapshot'ı MainActor'a küçük POD kopyası olarak taşır.
-- Monotonic clock kullanılır. Saat dilimi/sistem saati değişimi metric'i bozmaz.
-- Pause, background, stop ve epoch geçişinde zaman penceresi kapatılır. Resume'da
-  önceki pause süresi frame interval'a eklenmez.
-- İlk guest frame gelmeden FPS sıfır değil invalid'dir. İlk geçerli HUD verisi
-  ilk frame'den sonra en geç bir saniye içinde yayınlanır.
+The HUD is a native SwiftUI layer above `CAMetalLayer`, not part of the Vita
+framebuffer. It respects all safe areas and has hit testing disabled. It does not
+repeatedly announce live values; Pause/Settings provides an accessible summary.
+Pause freezes or resets rolling windows. Epoch changes discard old title data.
 
-## 10. HUD görsel ve etkileşim sözleşmesi
+The screenshot option appears only if the compositor can explicitly include or
+exclude the HUD. No guarantee is made about iOS system recording.
 
-### 10.1 Presetler
+## 11. Test and acceptance gates
 
-| Preset | İçerik | Yerleşim |
-| --- | --- | --- |
-| Off | HUD çizilmez; metrics toplama yalnız başka consumer yoksa minimuma iner | — |
-| Compact | Guest FPS ve guest frame interval EMA | Tek satır: `59.9 FPS · 16.7 ms` |
-| Standard | Guest/present FPS, rolling average ve 1% low | En fazla iki kısa satır |
-| Detailed | Standard + geçerli CPU/GPU time, memory, thermal, audio, pipeline, JIT, resolution ve pacing graph | Küçük panel; kullanıcı açtığında |
-| Custom | Kullanıcının capability içinden seçtiği metric sırası | Seçime göre; Compact sınırı aşılırsa panel |
+Settings tests cover unique keys, typed round trips, precedence combinations,
+unset behavior, both boot modes, shell-title-shell transitions, title persistence,
+capability rejection, apply behavior, rollback, crash recovery, migrations,
+redaction, and lifecycle concurrency.
 
-Varsayılan tüm yeni kurulumlarda:
+UI tests cover iPhone/iPad navigation, scope entry points, source badges, Use
+Parent behavior, visibility/search boundaries, unsupported states, restart
+messaging, Dynamic Type, VoiceOver, contrast, motion, and focus.
 
-```text
-preset = Compact
-position = Top Right
-updateRate = 4 Hz
-scale = 1.0
-```
+Metrics tests use a fake monotonic clock and synthetic 30/60/irregular sequences.
+They cover EMA, percentiles, 1% low, pause exclusion, epochs, ring wrap, stalls,
+audio underruns, and validity. On device, counters match instrumented traces. FPS
+tolerance is the greater of 1 FPS or 2%; interval tolerance is the greater of
+0.5 ms or 5%.
 
-Upstream overlay varsayılanı off/top-left olsa bile vita3kios ürün varsayılanı
-roadmap gereği on/top-right'tır.
+HUD tests cover first display within one second of the first valid frame, all
+safe areas, wrapping, pass-through touch, presets, validity changes, lifecycle,
+surface recreation, and accessibility.
 
-### 10.2 SwiftUI yerleşimi
+For MHUD, run at least three ten-minute HUD Off/Compact A/B trials on the same
+device, build, checkpoint, and settings after warm-up. Compact overhead is at
+most 1% CPU. Initial p95 frame-time cost is at most 0.2 ms or the Off-run 95%
+confidence interval, whichever is wider. Hooks allocate nothing per frame.
+Memory is bounded and unused heavy queries stop. Two-hour Direct Game and System
+Software soak tests show no overflow, growth, deadlock, or UI backlog.
 
-HUD render surface'in native container'ında şu kavramsal düzeni kullanır:
+MHUD is complete only when semantics, validity, layout, and performance pass in
+both boot modes.
 
-```text
-ZStack(alignment: .topTrailing)
-  RenderSurface (gerekirse ekran kenarlarına kadar)
-  PerformanceHUD
-    safeArea.top + 8 pt
-    safeArea.trailing + 8 pt
-```
+## 12. Implementation order
 
-- HUD, `CAMetalLayer` görüntüsünün üzerinde SwiftUI/native host katmanında
-  çizilir; Vita framebuffer'a yakılmaz.
-- Landscape orientation, Dynamic Island/notch ve iPad multitasking safe area
-  her layout pass'te hesaba katılır.
-- Compact başlangıç fontu yaklaşık 11 pt ve `monospacedDigit` olacaktır.
-- Yatay/dikey padding yaklaşık 6/4 pt, arka plan yüksek kontrastlı yarı saydam
-  material/capsule olacaktır. Opacity ayarı metni okunamaz hale getiremez.
-- HUD `allowsHitTesting(false)` olacaktır; touch overlay veya oyun gesture'ını
-  yakalamaz.
-- Canlı değişen değerler VoiceOver ile saniyede birkaç kez anons edilmez.
-  HUD varsayılan olarak accessibility live region değildir; Pause/Settings
-  ekranında son metric'lerin erişilebilir metin özeti sunulur.
-- Reduce Motion açıkken graph geçiş/animasyonu kapatılır veya azaltılır.
-- `Paused` durumunda rolling pencereler donar/sıfırlanır ve küçük `Paused`
-  durumu gösterilebilir; eski FPS çalışıyormuş gibi güncellenmez.
-- Boot/title geçişinde eski epoch verisi yeni title'ın HUD'ında gösterilmez.
+1. Phase 2B: descriptor/value/result types and settings/metrics ABI skeleton.
+2. Phase 2C: System Software boot target and mode profile identity.
+3. Phases 3-5: real renderer, audio, JIT, and device capability domains.
+4. Phase 7: ProfileStore, merge engine, and SwiftUI settings screens.
+5. Phase 7A: timestamp ring, metrics publisher, and native HUD.
+6. Phases 8-9: session, shell, audio/input lifecycle integration.
+7. Phases 10-12: persistence, migration, recovery, privacy, and fuzz tests.
+8. Phase 15: config/HUD diff and migration matrix for each upstream pin update.
 
-### 10.3 Screenshot ve kayıt
+## 13. Pinned upstream references
 
-Uygulama içi screenshot pipeline'ı HUD'ı ayrı compositor pass olarak dahil veya
-hariç tutabiliyorsa kullanıcı seçimi sunulur. Bu kabiliyet yoksa seçenek gizlenir.
-iOS sistem screen recording'in SwiftUI overlay'i yakalayıp yakalamamasını app'in
-tam kontrol ettiği iddia edilmeyecektir.
+- [Global config and HUD enums](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/config/include/config/config.h)
+- [Per-app CurrentConfig](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/config/include/config/state.h)
+- [Custom config persistence](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/config/src/settings.cpp)
+- [Settings application and Apple renderer](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/app/src/app_init.cpp)
+- [Runtime FPS calculation](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/app/src/app.cpp)
+- [SceDisplay frame counter](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/modules/SceDisplay/SceDisplay.cpp)
+- [Current performance overlay](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/overlay/src/perf_overlay.cpp)
 
-## 11. Test matrisi ve kabul kriterleri
-
-### 11.1 Settings unit ve integration testleri
-
-- Her descriptor stable key bakımından benzersizdir.
-- Her exposed upstream alanı tip, default, scope ve apply requirement ile round-trip
-  edilir.
-- Property-based merge testleri her anahtar için built-in/global/mode/title/session
-  kombinasyonunu ve `unset` davranışını doğrular.
-- Direct Game, System Software, shell->title->shell geçişleri aynı fixture setiyle
-  test edilir.
-- Title profili create/edit/remove ve game update/reimport sonrasında korunur.
-- Unsupported filter/memory mapping/range değeri typed error verir; UI gizleme
-  ile core validation aynı capability snapshot'ını kullanır.
-- Live ayar çalışan session'ı değiştirir; Boot/Recreate alanı yarım uygulanmaz.
-- Bir transaction içindeki tek invalid alan bütün commit'i geri alır.
-- Temp write, fsync öncesi crash, rename öncesi crash ve bozuk primary dosya
-  senaryoları last-known-good recovery'yi doğrular.
-- Her migration için old fixture -> new canonical store snapshot testi vardır.
-- Bilinmeyen yeni anahtar kayıpsız korunur veya açık incompatibility hatası verir.
-- Config/log export zRIF, bookmark, kişisel yol, pairing veya certificate içermez.
-- Thread Sanitizer destekli host testinde settings read/commit ile session lifecycle
-  arasında data race bulunmaz.
-
-### 11.2 Settings UI testleri
-
-- iPhone NavigationStack ve iPad NavigationSplitView'da tüm kategoriler erişilir.
-- Game detail title scope'una, System Software ekranı doğru mode scope'una açılır.
-- Effective value ve kaynak rozeti gerçek merge sonucuyla aynıdır.
-- `Globali Kullan`, override'ı siler; değeri kopyalamaz.
-- Basic görünüm Advanced/Developer anahtarlarını sızdırmaz; arama bu sınırı aşmaz.
-- Unsupported option yanlışlıkla etkinleştirilemez.
-- Restart/recreate değişikliği kullanıcıya uygulanma zamanını doğru söyler.
-- Dynamic Type, VoiceOver, yüksek kontrast, Reduce Motion ve yalnız controller/
-  keyboard navigasyonu kritik akışlarda geçer.
-- Türkçe/İngilizce string'lerde stable key veya hardcode edilmiş geliştirici metni
-  görünmez.
-
-### 11.3 Metrics doğruluk testleri
-
-Deterministik fake monotonic clock ve sentetik event dizileriyle:
-
-- Guest/present frame sayıları ve FPS hesabı tam eşleşir.
-- 30, 60 ve düzensiz frame dizilerinde EMA, p50, p95 ve p99/1% low beklenen
-  toleranstadır.
-- Pause/background süresi interval'a katılmaz.
-- Stop/restart ve shell/title epoch'ları birbirine karışmaz.
-- Ring wrap, tek frame, sıfır elapsed, uzun stall ve timestamp geri gitme guard'ı
-  test edilir.
-- Audio underrun yalnız gerçekten eksik PCM frame olduğunda artar.
-- Unsupported GPU/JIT/CPU metric validity biti kapalı kalır ve sıfır diye sunulmaz.
-
-Gerçek cihaz karşılaştırmasında:
-
-- Guest frame count, 10 saniyelik trace içindeki kabul edilmiş SceDisplay olay
-  sayısıyla birebir olmalıdır.
-- Present count, Vulkan/MoltenVK capture veya instrumented present hook ile
-  birebir olmalıdır.
-- FPS sapması uzun pencerede en fazla 1 FPS veya %2'den büyük olan toleranstır.
-- Frame interval ortalama/percentile sapması referans trace'e karşı en fazla
-  0.5 ms veya %5'ten büyük olan toleranstır.
-- GPU time yalnız Vulkan timestamp sonucu Metal System Trace ile makul biçimde
-  korele oluyorsa geçerli capability sayılır.
-- Memory ve thermal alanları aynı anda alınan host reference değer/durumuyla
-  eşleşmelidir.
-
-### 11.4 HUD görsel ve davranış testleri
-
-- Compact HUD Direct Game ve System Software'de ilk geçerli frameden sonra en
-  geç bir saniyede görünür.
-- Default top-right yerleşim tüm desteklenen iPhone/iPad orientation ve safe-area
-  fixture'larında notch, Dynamic Island, status/home indicator ve multitasking
-  sınırlarına girmez.
-- Compact tek satır mümkün değilse kontrollü iki satıra kırılır; ekran dışına
-  taşmaz ve oyun kontrolünü kapatmaz.
-- `allowsHitTesting(false)` UI testinde HUD altındaki touch/virtual button aynı
-  koordinatta çalışır.
-- Off/Compact/Standard/Detailed/Custom ve runtime metric validity değişimi snapshot
-  testleriyle doğrulanır.
-- Pause/resume/background/foreground/rotation/surface recreation sırasında stale
-  değer, crash veya layout sıçraması olmaz.
-- VoiceOver canlı sayıları tekrar tekrar anons etmez; Pause ekranındaki özet
-  erişilebilir olur.
-
-### 11.5 Performans kabul kriterleri
-
-MHUD kapısı için aynı cihaz, aynı build, aynı içerik/checkpoint ve sabit ayarlarla
-HUD Off/Compact A/B testi en az üç 10 dakikalık koşu olarak yapılır. İlk shader
-warm-up ayrı tutulur.
-
-Kabul kriterleri:
-
-- Compact HUD'ın ek CPU yükü roadmap ile uyumlu olarak `<= %1` olmalıdır.
-- p95 frame-time farkı ölçüm gürültüsü içinde kalmalı; başlangıç mühendislik
-  sınırı `<= 0.2 ms` veya Off koşularının %95 güven aralığıdır, hangisi daha
-  genişse o kullanılır.
-- Event hook'larında steady-state per-frame heap allocation olmamalıdır.
-- Metrics ring/snapshot belleği sabit ve cihazdan bağımsız üst sınırlı olmalıdır;
-  büyüyen sınırsız history tutulmaz.
-- HUD kapalı ve başka consumer yokken ağır CPU/GPU query'leri çalıştırılmaz.
-- Detailed metric capability'si GPU stall/readback oluşturuyorsa o metric release
-  build'de unsupported işaretlenir.
-- 2 saatlik Direct Game ve System Software soak testinde metric counter overflow,
-  memory growth, deadlock veya UI update backlog görülmemelidir.
-
-MHUD yalnız görsel olarak sayaç görünmesiyle tamamlanmış sayılmaz. İki boot
-modunda semantik doğruluk, validity davranışı, safe-area yerleşimi ve performans
-bütçesi birlikte geçmelidir.
-
-## 12. Uygulama sırası
-
-Bu belge roadmap faz sırasını değiştirmez. İlgili işler şu sırada uygulanır:
-
-1. Faz 2B'de descriptor/value/result tipleri, capability ve settings/metrics ABI
-   iskeleti oluşturulur.
-2. Faz 2C'de System Software boot target ve mode profile kimliği doğrulanır.
-3. Faz 3–5'te iOS device capability domain'leri gerçek renderer/audio/JIT
-   sonuçlarıyla doldurulur.
-4. Faz 7'de ProfileStore, merge motoru ve SwiftUI settings ekranları oluşturulur.
-5. Faz 7A'da timestamp ring, metric publisher ve native HUD uygulanır.
-6. Faz 8/8A/9'da session, system shell, audio/input lifecycle metric ve setting
-   uygulaması tamamlanır.
-7. Faz 10–12'de persistence, migration, end-to-end, fuzz/recovery ve privacy
-   testleri kapatılır.
-8. Faz 15'te her upstream pin değişiminde config/HUD kaynak diff'i ve migration
-   matrisi yeniden çalıştırılır.
-
-## 13. Pinlenmiş upstream kaynakları
-
-- [Global Config anahtarları ve HUD enum'ları](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/config/include/config/config.h)
-- [Per-app `CurrentConfig`](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/config/include/config/state.h)
-- [Custom config load/save ve restart-required listesi](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/config/src/settings.cpp)
-- [Settings commit ve runtime apply davranışı](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/app/src/app_init.cpp)
-- [Mevcut runtime FPS hesabı](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/app/src/app.cpp)
-- [`sceDisplaySetFrameBuf` frame sayacı](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/modules/SceDisplay/SceDisplay.cpp)
-- [Mevcut performance overlay preset ve çizimi](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/overlay/src/perf_overlay.cpp)
-- [Apple renderer seçiminin Vulkan'a sabitlenmesi ve runtime settings](https://github.com/Vita3K/Vita3K/blob/496939b602703951277263c7b3e60a9ae36879c1/vita3k/app/src/app_init.cpp)
-
-Bu kaynakların davranışı yeni upstream pin'de değişirse tablo sessizce geçersiz
-bırakılmaz; Faz 15 kapsamında belge, schema ve migration testleri birlikte
-güncellenir.
+When a new upstream pin changes these behaviors, Phase 15 updates this document,
+the schema, and migration tests together.

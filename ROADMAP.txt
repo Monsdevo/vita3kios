@@ -1,853 +1,732 @@
-vita3kios — ANA YOL HARİTASI
-Sürüm: 0.4
-Oluşturulma: 2026-08-22
-Durum: FAZ 1 VE M0 TAMAMLANDI — FAZ 2A SIRADA
+vita3kios — MASTER ROADMAP
+Version: 0.5
+Created: 2026-08-22
+Status: PHASE 1 AND M0 COMPLETE — PHASE 2A IN PROGRESS
 
 ==============================================================================
-0. BU DOSYANIN ROLÜ VE DEĞİŞİKLİK KURALI
+0. AUTHORITY AND CHANGE RULES
 ==============================================================================
 
-Bu dosya, vita3kios tamamlanana kadar projenin tek ana yol haritasıdır.
+This file is the single authoritative roadmap until vita3kios is complete.
 
-Durum işaretleri:
-  [ ] Başlanmadı
-  [~] Devam ediyor
-  [x] Tamamlandı ve çıkış ölçütleri doğrulandı
-  [!] Engelli; engel ve kanıt aynı maddede yazılmalı
-  [?] Karar kapısı; ölçüm yapılmadan seçim yapılamaz
+Status markers:
+  [ ] Not started
+  [~] In progress
+  [x] Complete and exit criteria verified
+  [!] Blocked; the blocker and its evidence must be recorded on the item
+  [?] Decision gate; no choice may be made before measurement
 
-Çalışma kuralları:
-  1. Bir fazın çıkış ölçütleri sağlanmadan sonraki fazın ana geliştirmesine
-     geçilmez. Bağımsız araştırma ve hazırlık işleri paralel yapılabilir.
-  2. Bir madde yalnızca derleme/test/cihaz kanıtı varsa [x] yapılır.
-  3. Yolun ortasında yeni ihtiyaç çıkarsa bu dosyaya tarihli bir değişiklik
-     kaydı ve gerekçe eklenir. Sessizce kapsam değiştirilmez.
-  4. Maddeler silinmez. Geçersiz kalan madde "İPTAL" olarak işaretlenir ve
-     yerine geçen madde gösterilir.
-  5. Her çalışma oturumunun sonunda "GÜNCEL DURUM" ve ilgili faz güncellenir.
-  6. Upstream Vita3K ile çelişen değişiklik mümkün olduğunca küçük, ayrık ve
-     upstream'e gönderilebilir tutulur.
-  7. Kullanıcıya ait oyun, firmware, anahtar, sertifika ve imzalama verileri
-     repoya hiçbir zaman eklenmez.
+Working rules:
+  1. Do not begin the main implementation of a later phase before the current
+     phase exit gate passes. Independent research and preparation may overlap.
+  2. Mark an item [x] only when build, test, or physical-device evidence exists.
+  3. Add any new requirement here with a dated change record and rationale.
+     Never change scope silently.
+  4. Never delete an item. Mark an invalid item CANCELLED and name its replacement.
+  5. Update CURRENT STATUS and the active phase at the end of every work session.
+  6. Keep changes that conflict with upstream Vita3K small, isolated, and suitable
+     for upstreaming whenever possible.
+  7. Never commit user games, firmware, keys, certificates, provisioning data,
+     pairing files, signing secrets, or personal device identifiers.
+  8. All repository-owned source text, documentation, comments, diagnostics, and
+     UI copy must be written in English.
+  9. Commits and pushes belong only in the Monsdevo/vita3kios root repository.
+     External/Vita3K is a pinned upstream submodule and must never receive a
+     vita3kios commit or push.
 
-GÜNCEL DURUM
-  [x] Çalışma klasörünün boş olduğu doğrulandı.
-  [x] İlk mimari ve fizibilite planı hazırlandı.
-  [x] Gerçek firmware system-software boot, ayrıntılı ayarlar ve performans HUD
-      ürün kapsamına eklendi.
-  [x] Pinli upstream macOS arm64 Release build, 2/2 CTest ve izole GUI smoke
-      testi mevcut çalışma ağacında geçti.
-  [x] İlk commit Monsdevo/vita3kios main dalına gönderildi; aynı commit ayrı,
-      recursive temiz checkout'ta build, 2/2 CTest, artefakt/pin doğrulaması ve
-      izole GUI smoke testinden geçti. M0 tamamlandı.
-
-==============================================================================
-1. DEĞİŞMEZ ÜRÜN TANIMI
-==============================================================================
-
-Ürün adı:
-  - Kullanıcıya görünen ad: vita3kios
-  - Okunuş/marka fikri: "vita-3-kios"
-  - Kod içi Swift modül/target adı: Vita3KiOS
-  - Bundle identifier: imzalama aşamasında belirlenecek; kaynakta sabit kişisel
-    takım kimliği tutulmayacak.
-
-Ana hedef:
-  - Açık kaynak Vita3K emülatör çekirdeğini arm64 iPhone/iPad üzerinde çalışan,
-    Apple-native bir uygulama içinde sunmak.
-  - Uygulamanın kendi sade, açıklayıcı ve native arayüzü olacak.
-  - Kullanıcı yasal olarak edindiği/dump ettiği içeriği Files üzerinden içe
-    aktarabilecek, kütüphanede görebilecek ve boot edebilecek.
-  - Oyun sırasında görüntü, ses, dokunmatik Vita yüzeyleri, fiziksel kontrolcü,
-    cihaz hareketi ve yaşam döngüsü iOS'a uygun şekilde yönetilecek.
-  - İki ayrı çalıştırma modu olacak:
-    1) Direct Game Mode: seçilen oyunu Vita system shell'i açmadan doğrudan boot.
-    2) System Software Mode: kullanıcının kurduğu resmi PS Vita firmware'indeki
-       gerçek sistem yazılımını/LiveArea shell'ini çalıştır; oyunlar bu ortamdan
-       da seçilip başlatılabilsin.
-  - "Firmware kuruldu" tek başına System Software Mode tamamlandı demek değildir.
-    Başarı, gerçek firmware UI'ının etkileşimli boot etmesiyle ölçülecek.
-  - Version 1.0, MSYS kilometre taşı tamamlanmadan yayınlanmış sayılmayacak.
-    Daha erken teknik alpha'lar Direct Game Mode ile yayımlanırsa System Software
-    desteğinin eksik olduğu görünür biçimde yazılacak.
-  - Ayarlar basit bir aç/kapat ekranı olmayacak. Global, Direct Game, System
-    Software ve title-specific profiller; Basic/Advanced görünümü; arama,
-    açıklama, varsayılana dönme ve güvenli migration içerecek.
-  - Direct Game ve System Software oturumlarının ikisinde de sağ üstte küçük,
-    okunabilir bir performans HUD'ı olacak. HUD kapatılabilir ve özelleştirilebilir
-    olacak; varsayılanı Compact görünüm olacak.
-
-İlk sürümün ana dağıtım hedefi:
-  - Gerçek cihazda geliştirici imzası veya sideload edilmiş IPA.
-  - Performans sürümü için JIT etkinleştirilmiş çalışma yolu.
-  - App Store sürümü ayrı bir karar kapısıdır; ilk çalışan portun ön koşulu
-    değildir ve şimdiden vaat edilmez.
-
-Kapsam dışı / yasak başlangıç kapsamı:
-  - Sony firmware'i, oyunları, lisans anahtarlarını veya şifre çözme verilerini
-    uygulamayla dağıtmak.
-  - Korsan içerik mağazası, oyun indirme kataloğu veya benzeri kaynak eklemek.
-  - Masaüstü Qt arayüzünü iOS'a taşımak veya iOS ekranına gömmek.
-  - İlk günden tüm Vita3K uyumluluk listesini desteklediğini iddia etmek.
-  - Simulator'ı gerçek emülasyon performans hedefi saymak.
-  - Ölçülmüş bir engel olmadan Vulkan renderer'ı baştan Metal ile yazmak.
-
-Başlangıç teknik kararları:
-  - Arayüz: SwiftUI; gerektiğinde küçük UIKit/MetalKit köprüleri.
-  - Çekirdek: upstream Vita3K C++ kodu; CMake ile derleme.
-  - Swift/C++ sınırı: kararlı bir C ABI; Swift doğrudan C++ nesnesi görmeyecek.
-  - CPU: önce Vita3K'nın Dynarmic A32->A64 yolu.
-  - GPU: önce Vita3K Vulkan renderer + MoltenVK + CAMetalLayer.
-  - Native servisler: GameController, CoreMotion, AVFoundation/AudioToolbox,
-    os/log, UIKit scene lifecycle ve Files document picker.
-  - Minimum iOS: ilk teknik varsayım iOS 17.4; Faz 2A'da gerçek cihaz ve JIT
-    sonuçlarına göre yükseltilebilir. Düşürme ancak test kanıtıyla yapılır.
-  - Desteklenen işlemci: yalnızca arm64 gerçek cihaz. Simulator UI ve parser
-    testleri için kullanılabilir; oyun çalıştırma desteği garanti edilmez.
-
-Lisans ilkesi:
-  - Upstream Vita3K GPLv2 kapsamındadır. Birlikte dağıtılan uygulama ve çekirdek
-    için GPL yükümlülükleri korunacak; tam karşılık gelen kaynak, lisans ve
-    değişiklik bilgisi her binary sürümle erişilebilir olacak.
-  - Tüm üçüncü taraf bağımlılıkların lisansı Faz 1'de envanterlenecek.
-  - Bu bölüm hukuki görüş değildir; halka açık dağıtımdan önce lisans kontrolü
-    ayrıca tamamlanacaktır.
+CURRENT STATUS
+  [x] The original workspace state was verified.
+  [x] The initial architecture and feasibility plan was completed.
+  [x] Authentic firmware-backed System Software Mode, detailed settings, and the
+      performance HUD were added to product scope.
+  [x] Pinned upstream passed a macOS arm64 Release build, 2/2 selected CTests,
+      artifact and pin checks, and an isolated GUI launch smoke test.
+  [x] Commit e832ba908f58b90f9286d8197607b8c2 was reproduced from a separate,
+      recursive clean checkout. M0 is complete.
+  [x] The root remote is https://github.com/Monsdevo/vita3kios.git and no
+      vita3kios changes are committed inside the upstream submodule.
+  [~] Phase 2A probe sources exist. Unsigned iPhoneOS arm64 Release builds for
+      the isolated Dynarmic JIT and static MoltenVK probes succeed.
+  [ ] M1 and M2 remain open until signed physical-device runtime evidence passes.
 
 ==============================================================================
-2. HEDEF MİMARİ
+1. FIXED PRODUCT DEFINITION
 ==============================================================================
 
-Planlanan depo düzeni (Faz 1/2 sonunda kesinleştirilecek):
+Identity:
+  - Product name: vita3kios
+  - Brand reading: "vita-3-kios"
+  - Swift module and target name: Vita3KiOS
+  - Bundle identifier: selected during signing; no personal Team ID is stored.
+
+Core product:
+  - Deliver the open-source Vita3K core in an Apple-native arm64 iPhone/iPad app.
+  - Use a clear, restrained, accessible SwiftUI interface owned by this project.
+  - Import legally obtained user content through Files, show it in a native
+    library, and boot it.
+  - Integrate video, audio, Vita touch surfaces, physical controllers, device
+    motion, and iOS lifecycle behavior.
+  - Provide two explicit boot modes:
+    1) Direct Game Mode boots a selected installed title without opening SceShell.
+    2) System Software Mode runs the authentic firmware-provided SceShell/
+       LiveArea environment and can launch installed titles from that shell.
+  - Firmware installation alone never proves System Software Mode. Success means
+    the real firmware UI boots interactively, launches a title, and returns.
+  - Do not publish version 1.0 before milestone MSYS passes. Any earlier Direct
+    Game technical alpha must state that System Software Mode is incomplete.
+  - Settings are not a simple toggle page. Support global, Direct Game, System
+    Software, and title profiles; Basic/Advanced/Developer views; search,
+    explanations, reset, validation, and safe migration.
+  - Both boot modes show a small readable top-right performance HUD by default.
+    The HUD is configurable and may be disabled; Compact is the default preset.
+
+Initial distribution target:
+  - Developer-signed or sideloaded IPA on a physical device.
+  - Explicitly enabled JIT for the performance build.
+  - App Store distribution is a later decision gate, not a promise.
+
+Out of scope:
+  - Distributing Sony firmware, games, licenses, keys, or decryption data.
+  - Adding a piracy store, game-download catalog, or similar content source.
+  - Porting or embedding the desktop Qt UI.
+  - Claiming full Vita3K compatibility at launch.
+  - Treating Simulator results as physical-device emulation evidence.
+  - Rewriting Vulkan in native Metal without a measured blocker.
+
+Initial technical decisions:
+  - UI: SwiftUI with small UIKit/MetalKit bridges where required.
+  - Core: pinned upstream Vita3K C++ built with CMake.
+  - Swift/C++ boundary: versioned C ABI; Swift never owns raw C++ objects.
+  - CPU: Dynarmic A32-to-A64 first.
+  - GPU: Vita3K Vulkan renderer through MoltenVK and CAMetalLayer first.
+  - Native services: GameController, CoreMotion, AVFoundation/AudioToolbox,
+    os/log, UIKit scene lifecycle, and Files document picker.
+  - Provisional minimum: iOS 17.4. Raise it only from Phase 2A measurements;
+    lower it only with test evidence.
+  - Runtime architecture: arm64 physical devices only. Simulator may host UI and
+    parser tests but is not a supported game-runtime target.
+
+License policy:
+  - Preserve Vita3K GPL-2.0 obligations for the combined application and core.
+  - Make corresponding source, licenses, commit IDs, and modifications available
+    with every distributed binary.
+  - Inventory all third-party licenses and complete a release legal review.
+  - This roadmap is not legal advice.
+
+==============================================================================
+2. TARGET ARCHITECTURE
+==============================================================================
+
+Planned repository layout:
 
   vita3kios/
     ROADMAP.txt
     README.md
     LICENSES/
     Docs/
-      ARCHITECTURE.md
-      BUILDING.md
-      TESTING.md
-      UPSTREAM_SYNC.md
-      DISTRIBUTION.md
     App/
-      Vita3KiOS/                 SwiftUI uygulaması
+      Vita3KiOS/
       Vita3KiOSTests/
       Vita3KiOSUITests/
     Core/
-      Bridge/                    C/Objective-C++ köprüsü
-      PlatformIOS/               iOS host adaptörleri
+      Bridge/
+      PlatformIOS/
       CMakeLists.txt
     External/
-      Vita3K/                    Sabit commit'e pinlenmiş upstream submodule
+      Vita3K/
+    Probes/
+      Device/
     Scripts/
-      bootstrap
-      build-core
-      build-app
-      test
-      package-ipa
-      sync-upstream
     Tests/
-      Fixtures/                  Yalnızca özgür/yapay küçük test verileri
+      Fixtures/
       DeviceSmoke/
-    Build/                       Git tarafından izlenmez
+    Build/                       ignored by Git
 
-Katmanlar ve sorumluluklar:
+Layers:
 
-  A. Native App katmanı
-     - SwiftUI kütüphane, ayarlar, import, hata ve onboarding ekranları.
-     - SwiftData/Core Data seçimi yapılmadan önce veri modeli ölçülecek; oyun
-       dosyalarının kendisi veritabanına konmayacak.
-     - Uygulama yaşam döngüsü, erişilebilirlik ve yerelleştirme.
+  A. Native App
+     - SwiftUI library, settings, import, error, diagnostics, and onboarding.
+     - Select SwiftData/Core Data only after measuring the model; never store game
+       files in the database.
+     - Own app lifecycle, accessibility, localization infrastructure, and UI state.
 
   B. Session Coordinator
-     - Tek bir emülasyon oturumunun durum makinesi:
+     - One emulation session state machine:
        idle -> preparing -> waitingForJIT -> booting -> running <-> paused
-       -> stopping -> idle; hata durumundan kontrollü temizleme.
-     - UI thread üzerinde bloklama yapmama.
-     - Aynı anda ikinci oyun açılmasını engelleme.
-     - Oturum türünü ayrı taşıma: directGame(titleID) veya systemSoftware.
-     - System Software içinden oyun açıldığında oturumun shell->title->shell
-       geçişini ve ilgili save/config sahipliğini koruma.
+       -> stopping -> idle, with controlled cleanup after errors.
+     - Never block the UI thread or allow a second concurrent title session.
+     - Preserve explicit directGame(titleID) and systemSoftware session types.
+     - Preserve shell -> title -> shell ownership of saves and configuration.
 
   C. Vita3KBridge C ABI
-     - create/destroy, initialize, install, enumerate, boot, pause, resume, stop.
-     - Frame/surface, input, audio, log, progress ve hata callback'leri.
-     - C++ exception'ları ABI dışına kaçırmama; tipli hata kodu + açıklama.
-     - ABI sürümü ve capability sorgusu.
-     - Ayrı boot entry point'leri: boot_title ve boot_system_software.
-     - Ayar şeması/capability/etkin değer sorguları ve tipli setting mutation.
-     - HUD snapshot callback'i: frame timing, emulation speed, CPU/GPU/JIT,
-       memory, thermal ve audio sayaçlarından desteklenenler.
+     - create/destroy, initialize/shutdown, install/enumerate, boot/pause/resume/stop.
+     - Frame/surface, input, audio, log, progress, metrics, and error callbacks.
+     - Typed errors; no C++ exception may cross the ABI.
+     - ABI version and capability queries.
+     - Separate boot_title and boot_system_software entry points.
+     - Versioned settings descriptors, effective values, validation, and mutation.
+     - HUD snapshots for supported frame, CPU/GPU/JIT, memory, thermal, and audio data.
 
-  D. iOS Platform katmanı
-     - Sandbox path çözümleme, güvenli atomik yazım, geçici alan yönetimi.
-     - CAMetalLayer/MoltenVK yüzeyi.
-     - Executable memory/JIT adaptörü.
-     - GameController/CoreMotion/touch girişleri.
-     - Audio session ve düşük gecikmeli ses çıkışı.
-     - Foreground/background, interruption, thermal/memory pressure olayları.
+  D. iOS Platform
+     - Sandbox paths, atomic writes, temporary storage, and recovery.
+     - CAMetalLayer/MoltenVK surface and executable-memory/JIT adapters.
+     - GameController, CoreMotion, touch, audio session, and low-latency output.
+     - Foreground/background, interruption, thermal, and memory-pressure events.
 
   E. Upstream Vita3K Core
-     - CPU, kernel, HLE modülleri, GXM/shader çevirisi, Vulkan renderer,
-       paket/firmware işleme, sanal dosya sistemi.
-     - Qt GUI ve masaüstü main() iOS binary'sine bağlanmayacak.
-     - Upstream firmware installer'ın LLE modülü kurması ile gerçek firmware
-       shell boot yolu ayrı tutulacak; eksik boot-chain/HLE/LLE işi ayrıca izlenecek.
+     - CPU, kernel, HLE modules, GXM/shader translation, Vulkan renderer,
+       package/firmware handling, and VFS.
+     - Exclude Qt GUI and desktop main() from the iOS binary.
+     - Treat installing LLE firmware modules and booting the authentic firmware
+       shell as separate capabilities with separate evidence.
 
-Bağımlılık stratejisi:
-  - Upstream kaynak ve alt modülleri yeniden kopyalanmayacak; Git submodule ile
-    kesin commit pinlenecek.
-  - iOS yamaları önce PlatformIOS/Bridge içinde tutulacak.
-  - Upstream dosyası değişmek zorundaysa küçük, konulu commit yapılacak.
-  - Qt, Discord SDK ve masaüstüne özel bileşenler iOS build graph'ından çıkarılacak.
-  - Her iOS bağımlılığı için: arm64 slice, bitcode beklentisi yokluğu, exception/
-    RTTI ihtiyacı, lisans, dynamic/static bağlantı ve private API kontrolü yapılacak.
-
-==============================================================================
-3. BAŞARI KİLOMETRE TAŞLARI
-==============================================================================
-
-  M0  Upstream Vita3K macOS arm64'ta tekrarlanabilir biçimde derleniyor.
-  M1  İzole Dynarmic probe küçük, sabit bir ARMv7 test dizisini gerçek cihazda
-      JIT ile çalıştırıp beklenen sonucu veriyor.
-  M2  İzole MoltenVK probe gerçek cihazdaki CAMetalLayer'a test karesi sunuyor
-      ve gerekli temel Vulkan feature'larını raporluyor.
-  M3  iOS arm64 için Vita3KCore binary'si derlenip boş SwiftUI uygulamasına
-      bağlanıyor; capability/version çağrısı gerçek cihazdan dönüyor.
-  M4  Açık kaynak bir Vita homebrew içerik UI olmadan core test harness'ta boot
-      ediyor ve beklenen log/checkpoint'e ulaşıyor.
-  M5  Aynı homebrew görüntü + ses + dokunmatik/fiziksel kontrolcü ile oynanıyor.
-  M6  Native kütüphane içinden import -> metadata -> boot -> stop -> yeniden
-      boot akışı veri kaybı olmadan çalışıyor.
-  MSYS Kullanıcının kurduğu resmi firmware'den gerçek Vita system software/
-       LiveArea etkileşimli açılıyor; en az bir kurulu title shell içinden boot
-       edilip shell'e güvenli dönülebiliyor.
-  MHUD Direct Game ve System Software modlarında top-right Compact HUD doğru
-       frame/performance verisini düşük ek yükle gösteriyor.
-  M7  Alpha: seçilmiş test matrisi, kurulum ve tanılama akışları tamam.
-  M8  Beta/Release: performans, kararlılık, lisans, paketleme ve doküman kapıları
-      tamam.
-
-Her kilometre taşı için kanıt:
-  - Kullanılan upstream commit'i ve app commit'i.
-  - Cihaz modeli, iOS sürümü, imzalama/JIT yöntemi.
-  - Derleme komutu ve sonuç özeti.
-  - Log, ölçüm ve bilinen hata listesi.
+Dependency strategy:
+  - Pin upstream and recursive dependencies by Git commit; do not copy source trees.
+  - Keep iOS-specific code in PlatformIOS/Bridge where possible.
+  - If upstream files require changes, use small versioned patches.
+  - Exclude Qt, Discord SDK, OpenGL, and desktop-only components from iOS.
+  - Audit every iOS dependency for arm64 slices, exceptions/RTTI, license,
+    static/dynamic linkage, public API usage, and signing behavior.
 
 ==============================================================================
-4. FAZLAR
+3. SUCCESS MILESTONES
 ==============================================================================
 
-FAZ 1 — DEPO, ARAÇ ZİNCİRİ VE UPSTREAM TABAN ÇİZGİSİ
-Amaç: Tekrarlanabilir, lisansı belli ve güncellenebilir bir geliştirme zemini.
+  M0    Pinned upstream Vita3K builds reproducibly on macOS arm64.
+  M1    The isolated Dynarmic probe executes fixed ARMv7 tests through JIT on a
+        physical device and returns the expected results.
+  M2    The isolated MoltenVK probe presents a test frame to a physical-device
+        CAMetalLayer and reports required Vulkan capabilities.
+  M3    Vita3KCore builds for iOS arm64, links into an empty SwiftUI app, and
+        returns version/capability data on a physical device.
+  M4    Redistributable open-source Vita homebrew boots in a headless core harness.
+  M5    That homebrew is usable with video, audio, touch, and a controller.
+  M6    Native library import -> metadata -> boot -> stop -> reboot works without
+        data loss.
+  MSYS  Authentic firmware-provided SceShell/LiveArea boots interactively,
+        launches an installed title, and safely returns to the shell.
+  MHUD  Accurate low-overhead top-right Compact HUD works in both boot modes.
+  M7    Alpha installation, selected compatibility, and diagnostics gates pass.
+  M8    Beta/release performance, stability, licensing, packaging, and docs pass.
 
-  [x] 1.1 Kök dizinde Git deposunu oluştur; main branch ve temel .gitignore ekle.
-  [x] 1.2 Xcode yolu için sistem ayarını zorla değiştirmeden build scriptlerinde
-          DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer kullan.
-  [x] 1.3 xcodebuild, SDK, Swift, Clang, CMake, Ninja ve Git sürümlerini kaydet.
-          Pinlenen upstream'in gerçek CMake ayarı esas alınacak; güncel master
-          C++23 istiyor, eski build belgesindeki C++20 ifadesine güvenilmeyecek.
-  [x] 1.4 Official Vita3K deposunu External/Vita3K altında recursive submodule
-          olarak ekle ve doğrulanmış bir commit'e pinle.
-  [x] 1.5 Official upstream remote/fork stratejisini Docs/UPSTREAM_SYNC.md'ye yaz.
-  [x] 1.6 Alt modüller dahil bağımlılık ve lisans envanteri üret.
-  [x] 1.7 Upstream'in resmi macOS arm64 preset/build yolunu temiz build ile dene.
-  [x] 1.8 Upstream testlerini çalıştır; başarısız mevcut testleri baseline olarak
-          ayrı kaydet, iOS değişikliğiyle karıştırma.
-  [x] 1.9 macOS uygulamasını en azından açılış/log seviyesinde smoke-test et.
-  [x] 1.10 Derleme adımlarını Scripts/bootstrap ve Docs/BUILDING.md içinde
-           tekrar edilebilir hale getir.
+Evidence required for every milestone:
+  - Root application commit and upstream commit.
+  - Device model, iOS version, signing method, and JIT method.
+  - Exact build command and result.
+  - Logs, measurements, known failures, and sanitized artifacts.
 
-Çıkış kapısı:
-  [x] Aynı commit temiz klasörde belgelenmiş tek komut akışıyla derleniyor.
-  [x] Upstream commit, toolchain ve lisans envanteri kayıtlı.
-  [x] M0 tamam; ilk commit'ten temiz checkout tekrarı geçti.
+==============================================================================
+4. PHASES
+==============================================================================
 
-FAZ 2A — ERKEN FİZİBİLİTE KAPISI: JIT + MOLTENVK DEVICE PROBE
-Amaç: Büyük port yatırımından önce iki temel iOS varsayımını gerçek cihazda kanıtlamak.
+PHASE 1 — REPOSITORY, TOOLCHAIN, AND UPSTREAM BASELINE
+Goal: Create a reproducible, licensed, maintainable foundation.
 
-  [ ] 2A.1 Kullanılacak gerçek test cihazı, SoC/RAM, iOS sürümü, Developer Mode
-           ve development/sideload imzalama yöntemini kaydet.
-  [ ] 2A.2 Tam Vita3KCore'u bağlamadan, yalnızca pinli Dynarmic ve gereken en küçük
-           bağımlılıklarla arm64 iPhoneOS probe target oluştur.
-  [ ] 2A.3 İmzalanmış probe binary'sinde gerçek entitlement'ları codesign ile oku;
-           provisioning sonucunu yalnızca project ayarından varsayma.
-  [ ] 2A.4 Harici StikDebug yolu için pairing file, loopback VPN, personalized DDI
-           mount ve get-task-allow önkoşullarını doğrula.
-  [ ] 2A.5 Sabit ARMv7 instruction testleri çalıştır: arithmetic, branch, memory,
-           code invalidation ve instruction-cache flush.
-  [ ] 2A.6 Xcode launch, StikDebug launch, force-quit/yeniden açma ve cihaz reboot
-           sonrası JIT hazırlığını ayrı ayrı kaydet.
-  [ ] 2A.7 Ayrı küçük render probe ile SwiftUI/UIKit CAMetalLayer üzerinde MoltenVK
-           clear/triangle frame sun.
-  [ ] 2A.8 MoltenVK probe'da portability, fragment shader interlock, swizzle,
-           texture formatları ve surface extension capability raporu üret.
-  [ ] 2A.9 Probe artifact'larında otool ile beklenmeyen/standalone dylib olmadığını
-           doğrula; tüm native kod statik veya uygulamaya gömülü aynı-imzalı framework.
-  [ ] 2A.10 Sonuçları Docs/FEASIBILITY.md'ye cihaz/OS/toolchain/commit/log ile yaz.
+  [x] 1.1 Initialize the root Git repository, main branch, and .gitignore.
+  [x] 1.2 Select Xcode through script-local DEVELOPER_DIR without changing the
+          machine-wide xcode-select setting.
+  [x] 1.3 Record xcodebuild, SDK, Swift, Clang, CMake, Ninja, and Git versions.
+  [x] 1.4 Add official Vita3K as a recursive submodule at a verified commit.
+  [x] 1.5 Document upstream/fork policy in Docs/UPSTREAM_SYNC.md.
+  [x] 1.6 Produce dependency and license inventories including submodules.
+  [x] 1.7 Run the official macOS arm64 Release build from a clean checkout.
+  [x] 1.8 Run selected upstream tests and record the baseline separately.
+  [x] 1.9 Smoke-test the macOS GUI launch and log path.
+  [x] 1.10 Make the flow reproducible through Scripts and Docs/BUILDING.md.
 
-Çıkış kapısı:
-  [ ] Dynarmic testleri aynı cihazda art arda 20 kez doğru sonuç veriyor.
-  [ ] MoltenVK surface/frame probe gerçek cihazda çalışıyor.
-  [ ] M1 ve M2 tamam.
-  [ ] Kapı geçmezse native UI geliştirmesi büyütülmez; [!] engeli, kanıtı ve
-      denenmiş çözümler bu roadmap'e yazılır. Güvenli alternatif araştırma sürer.
+Exit gate:
+  [x] A clean checkout builds through the documented command flow.
+  [x] Upstream commit, toolchain, artifact hashes, and licenses are recorded.
+  [x] M0 complete.
 
-FAZ 2B — ÇEKİRDEĞİ GUI'DEN AYIRMA VE C ABI
-Amaç: Qt/masaüstü main() olmadan yönetilebilen, test edilebilir Vita3KCore.
+PHASE 2A — EARLY FEASIBILITY: JIT AND MOLTENVK DEVICE PROBES
+Goal: Prove the two highest-risk iOS assumptions before product UI investment.
 
-  [ ] 2B.1 Upstream main.cpp, interface.cpp, Android frontend/JNI ve CMake target
-          graph'ını inceleyip yeniden kullanılabilir API sınırını belge.
-  [ ] 2B.2 iOS'ta gereken core modüllerini; Qt/Discord/desktop/OpenGL/debug-only
-          modüllerinden ayır.
-  [ ] 2B.3 Vita3KCore için create/destroy/init/shutdown yaşam döngüsünü ekle.
-  [ ] 2B.4 C header'da ABI version, capabilities, error ve callback tiplerini tanımla.
-  [ ] 2B.5 C++ exception, ownership, callback thread'i ve string ömrü kurallarını yaz.
-  [ ] 2B.6 install firmware/archive/pkg, enumerate titles ve boot/stop işlevlerini
-          UI'sız çağrılabilir hale getir.
-  [ ] 2B.7 Core işlemlerini seri bir emülasyon kuyruğunda çalıştır; progress/log
-          callback'lerini UI için güvenli şekilde aktar.
-  [ ] 2B.8 macOS host test harness oluştur ve API state-machine negatif testlerini yaz.
-  [ ] 2B.9 CMake install/export ile iOS'a paketlenebilir static framework/XCFramework
-          prototipi üret. Nihai paket biçimini ölçümle doğrula.
-  [ ] 2B.10 Qt ve masaüstü main() olmadan core target'ın linklendiğini doğrula.
+  [~] 2A.1 Record the physical device, SoC/RAM, iOS version, Developer Mode, and
+           development/sideload signing method. Device and OS are known; runtime
+           RAM evidence and a usable local signing identity are still pending.
+  [x] 2A.2 Build an arm64 iPhoneOS probe from pinned Dynarmic and the smallest
+           dependency graph without linking full Vita3KCore.
+  [ ] 2A.3 Inspect actual entitlements and embedded provisioning data from the
+          signed probe; never infer them only from project settings.
+  [ ] 2A.4 Validate StikDebug prerequisites: pairing file, loopback VPN,
+          personalized DDI mount, and get-task-allow.
+  [~] 2A.5 Implement and run fixed ARMv7 arithmetic, flags, branch, callback
+           memory, code invalidation, ClearCache, and instruction-cache tests.
+           The tests compile; physical-device execution is pending.
+  [ ] 2A.6 Record Xcode launch, StikDebug launch, force-quit/relaunch, and device
+          reboot behavior separately.
+  [~] 2A.7 Build a separate UIKit/CAMetalLayer MoltenVK probe and present a clear
+           and triangle frame. The unsigned clear-frame target builds; signed
+           physical-device presentation and triangle evidence are pending.
+  [~] 2A.8 Report portability, fragment interlock/raster order, swizzle, texture
+           formats, and surface extensions. Initial report code exists; functional
+           swizzle and the complete renderer format matrix remain pending.
+  [x] 2A.9 Verify one arm64 iOS slice and no unexpected standalone/dynamic or
+           host-machine libraries in both unsigned compile artifacts.
+  [~] 2A.10 Record device/OS/toolchain/commit/log results in Docs/FEASIBILITY.md.
+            Compile evidence is recorded; signed runtime logs remain pending.
 
-Çıkış kapısı:
-  [ ] Host harness init -> enumerate -> shutdown ve hata yollarını geçiyor.
-  [ ] Public bridge header'ında C++ STL/Qt tipi yok.
-  [ ] Core target Qt veya Discord'a linklenmiyor.
+Exit gate:
+  [ ] Dynarmic tests pass 20 consecutive times on the same physical device.
+  [ ] MoltenVK surface, clear frame, and triangle pass on the physical device.
+  [ ] M1 and M2 complete.
+  [ ] If the gate fails, do not expand native UI implementation. Record a [!]
+      blocker, evidence, and attempted remedies, then continue safe alternatives.
 
-FAZ 2C — SYSTEM SOFTWARE ERKEN FİZİBİLİTE VE BOOT-HEDEFİ GENELLEMESİ
-Amaç: System Software Mode işini UI bittikten sonraya bırakmadan gerçek firmware
-shell yolu üzerindeki çekirdek boşluklarını yürütülebilir kanıtla çıkarmak.
+PHASE 2B — CORE/GUI SEPARATION AND C ABI
+Goal: Produce a testable Vita3KCore without Qt or desktop main().
 
-  [x] 2C.1 Pinli upstream'in gerçek durumunu belge: PUP partition extraction var;
-           authentic SceShell/LiveArea boot, kalıcı multi-process shell ve
-           shell->title->shell lifecycle yok. Kanıt Docs/FEASIBILITY.md'de.
-  [ ] 2C.2 AppLaunchRequest/app0 modelini InstalledGame, SystemShell ve SystemApp
-           boot hedeflerini ifade edecek şekilde tasarla; Direct Game'i bozma.
-  [ ] 2C.3 Kullanıcının sağladığı resmî firmware için vs0/os0/sa0/pd0 inventory
-           ve shell executable readiness raporu oluştur.
-  [ ] 2C.4 Firmware shell executable'ını raw-load etmeyi deneyen headless harness;
-           ilk loader/main-thread/checkpoint ve hata türü kaydedilsin.
-  [ ] 2C.5 Eksik NID/sysmodule/IPC/system-event çağrılarını makinece ayrıştırılabilir
-           trace olarak çıkar; ilk-frame iş listesini üret.
-  [ ] 2C.6 SceShellSvc, SceAppMgr, registry, IPMI/shared framebuffer ve process
-           modelindeki eksikleri sahipli alt fazlara böl.
+  [ ] 2B.1 Audit main.cpp, interface.cpp, Android/JNI, and CMake target boundaries.
+  [ ] 2B.2 Separate required core modules from Qt/Discord/desktop/debug-only code.
+  [ ] 2B.3 Add create/destroy/initialize/shutdown lifecycle.
+  [ ] 2B.4 Define ABI version, capability, error, callback, and value types in C.
+  [ ] 2B.5 Define ownership, callback threads, string lifetime, and exception rules.
+  [ ] 2B.6 Expose UI-free firmware/package install, title enumeration, boot, and stop.
+  [ ] 2B.7 Serialize core operations and safely forward progress/log callbacks.
+  [ ] 2B.8 Build a macOS host harness with negative state-machine tests.
+  [ ] 2B.9 Prototype a CMake-exported static framework/XCFramework.
+  [ ] 2B.10 Prove the core target links without Qt or desktop main().
 
-Çıkış kapısı:
-  [ ] Gerçek firmware shell denemesi tekrarlanabilir ve ilk engel varsayım değil
-      log/trace ile belirli.
-  [ ] FAZ 8A için kernel/service/process iş listesi ölçülebilir durumda.
+Exit gate:
+  [ ] Host harness passes init -> enumerate -> shutdown and error paths.
+  [ ] The public C header exposes no C++ STL or Qt type.
+  [ ] Core target links neither Qt nor Discord.
 
-FAZ 3 — iOS DERLEME SPIKE'I VE BAĞIMLILIK TEMİZLİĞİ
-Amaç: Gerçek iOS arm64 binary üretmek; her derleme engelini sınıflandırmak.
+PHASE 2C — EARLY SYSTEM SOFTWARE FEASIBILITY AND GENERALIZED BOOT TARGETS
+Goal: Measure authentic firmware-shell gaps before UI completion.
 
-  [ ] 3.1 iOS arm64 CMake toolchain/preset oluştur; provisional deployment 17.4.
-  [ ] 3.2 Önce en küçük Bridge+Core target'ı iphoneos için derle.
-  [ ] 3.3 Her bağımlılığı sırayla sınıflandır:
-          a) doğrudan iOS uyumlu,
-          b) build flag/ufak patch gerekiyor,
-          c) desktop-only ve çıkarılmalı,
-          d) native iOS karşılığıyla değiştirilmeli.
-  [ ] 3.4 POSIX farklarını ele al: signals, mmap/mprotect, file locking, sockets,
-          thread adları/öncelikleri, locale, environment ve path davranışı.
-  [ ] 3.5 App sandbox köklerini tanımla:
-          Application Support/vita3k/fs, Caches, Logs, Imports/Staging, Backups.
-  [ ] 3.6 Dosya yollarında container değişimini tolere et; mutlak app-container
-          yolunu kalıcı metadata olarak saklama.
-  [ ] 3.7 SwiftUI boş shell + bridge version/capability ekranını scaffold et.
-  [ ] 3.8 Simulator'da UI/bridge smoke; gerçek cihazda arm64 link/load smoke yap.
-  [ ] 3.9 Device ve gerekirse simulator slice'larını kontrollü artifact olarak üret.
-  [ ] 3.10 Derleme uyarılarını sınıflandır; yeni port kodunda warning bütçesini sıfırla.
+  [x] 2C.1 Document pinned-upstream reality: PUP partition extraction exists;
+           authentic SceShell/LiveArea boot, persistent multi-process shell, and
+           shell -> title -> shell lifecycle do not.
+  [ ] 2C.2 Generalize AppLaunchRequest/app0 into InstalledGame, SystemShell, and
+          SystemApp targets without breaking Direct Game Mode.
+  [ ] 2C.3 Produce vs0/os0/sa0/pd0 inventory and shell readiness from user firmware.
+  [ ] 2C.4 Build a headless raw-load shell experiment with typed checkpoints.
+  [ ] 2C.5 Emit machine-readable missing NID/sysmodule/IPC/system-event traces.
+  [ ] 2C.6 Split SceShellSvc, SceAppMgr, registry, IPMI/shared framebuffer, and
+          process-model gaps into owned subphases.
 
-Çıkış kapısı:
-  [ ] Gerçek cihaz uygulaması Vita3KCore'u yükleyip sürüm/capability döndürüyor.
-  [ ] Tüm kapalı/uyumsuz bağımlılıkların sahibi ve çözüm planı belli.
-  [ ] M3 tamam.
+Exit gate:
+  [ ] Raw shell experiment is reproducible and its first blocker is trace-backed.
+  [ ] Phase 8A kernel/service/process backlog is measurable.
 
-FAZ 4 — JIT, EXECUTABLE MEMORY VE CPU DOĞRULAMASI
-Amaç: Vita ARMv7 kodunun iOS arm64 üzerinde güvenilir ve hızlı çalışması.
+PHASE 3 — iOS BUILD SPIKE AND DEPENDENCY CLEANUP
+Goal: Produce a real iOS arm64 core binary and classify every blocker.
 
-  [ ] 4.1 Kullanılacak gerçek test cihazı, iOS sürümü, Developer Mode ve imzalama
-          türünü kaydet.
-  [ ] 4.2 Development/sideload profile içinde get-task-allow durumunu binary'den
-          doğrula; sadece Xcode ayarına güvenme.
-  [ ] 4.3 İlk yol olarak harici StikDebug ile JIT etkinleştirme akışını belge ve test et.
-  [ ] 4.4 Uygulamada JIT capability probe ekle; boot öncesi anlaşılır durum/hata göster.
-  [ ] 4.5 Dynarmic executable code allocator'ını Apple W^X kurallarına uygun adapte et.
-  [ ] 4.6 Küçük sabit ARMv7 instruction testleri: arithmetic, branch, memory,
-          exception, cache invalidation ve çoklu thread.
-  [ ] 4.7 Pause/resume, background->foreground ve ikinci boot sonrası JIT cache
-          yaşam döngüsünü test et.
-  [ ] 4.8 Hata halinde crash yerine güvenli stop + tanı logu üret.
-  [?] 4.9 Entegre StikJIT/app-extension yolu yalnızca harici akış M6 sonrasında UX
-          engeli olursa değerlendir; MPL/AGPL ve dağıtım etkisini önce denetle.
-  [?] 4.10 JIT'siz interpreter yolu: teknik olarak boot edebiliyorsa ayrı Store-
-           compatible deney olarak ölç; ana performans yolunun yerini otomatik almaz.
+  [ ] 3.1 Create iOS arm64 CMake preset/toolchain; provisional target iOS 17.4.
+  [ ] 3.2 Compile the smallest Bridge+Core target for iphoneos first.
+  [ ] 3.3 Classify each dependency as native, small-patch, desktop-only, or replace.
+  [ ] 3.4 Adapt signals, mmap/mprotect, locks, sockets, threads, locale, env, paths.
+  [ ] 3.5 Define Application Support, Caches, Logs, Imports/Staging, and Backups.
+  [ ] 3.6 Persist relative identities, never absolute container paths.
+  [ ] 3.7 Scaffold an empty SwiftUI shell with bridge version/capability display.
+  [ ] 3.8 Run Simulator UI/bridge smoke and physical-device arm64 link/load smoke.
+  [ ] 3.9 Produce controlled device and optional Simulator artifacts.
+  [ ] 3.10 Classify warnings and keep new port code warning-free.
 
-Çıkış kapısı:
-  [ ] ARM testlerinin tamamı aynı cihazda art arda 20 çalıştırmada doğru.
-  [ ] JIT yok/kapalı/bozuk durumlarının her biri kullanıcıya açıklanıyor.
-  [ ] Erken M1 probe sonuçları tam Vita3KCore entegrasyonunda da korunuyor.
+Exit gate:
+  [ ] Physical-device app loads Vita3KCore and returns version/capabilities.
+  [ ] Every incompatible dependency has an owner and resolution.
+  [ ] M3 complete.
 
-FAZ 5 — GRAFİK: CAMetalLayer + MOLTENVK
-Amaç: Upstream Vulkan renderer'ı minimum ayrışmayla iOS ekranına bağlamak.
+PHASE 4 — JIT, EXECUTABLE MEMORY, AND CPU VALIDATION
 
-  [ ] 5.1 SwiftUI içine UIKit/MetalKit temsilcisiyle CAMetalLayer sahibi render view ekle.
-  [ ] 5.2 CAMetalLayer'dan VK_EXT_metal_surface oluşturacak iOS DisplayHandle ekle.
-  [ ] 5.3 MoltenVK'yi device arm64 için statik/dinamik bağlantı ve lisans açısından
-          doğrula; private API taraması yap.
-  [ ] 5.4 Test clear/triangle frame sun; rotation, drawableSize, Retina scale,
-          safe area ve 60/120 Hz davranışını test et.
-  [ ] 5.5 Upstream'in Apple ayarlarını koru: portability enumeration, image swizzle,
-          shader/pipeline cache ve gerekli feature kontrolleri.
-  [ ] 5.6 Surface kaybı, app background, ekran kilidi ve scene yeniden bağlanmasını ele al.
-  [ ] 5.7 Vita'nın 960x544 görünüm oranı için aspect-fit varsayılanı; integer/stretch
-          seçeneklerini sonradan ayar olarak sun.
-  [ ] 5.8 GPU capture/validation ile ilk GXM shader ve frame sorunlarını ayıkla.
-  [ ] 5.9 Shader/pipeline cache'i Caches altında sürümlü ve güvenli temizlenebilir tut.
-  [?] 5.10 MoltenVK karar kapısı:
-           - Eksik özellik doğrulukla emüle edilebiliyorsa MoltenVK'de kal.
-           - Performans sorunu varsa önce ölç/profil/ayar yap.
-           - Yalnızca çözülemeyen somut API engeli varsa native Metal renderer için
-             ayrı alt-roadmap ekle. Tahmine dayanarak renderer yeniden yazma.
+  [ ] 4.1 Record test device, OS, Developer Mode, and signing route.
+  [ ] 4.2 Read get-task-allow and related entitlements from the signed binary.
+  [ ] 4.3 Document and test external StikDebug as the initial JIT route.
+  [ ] 4.4 Add a user-facing pre-boot JIT capability probe and typed errors.
+  [ ] 4.5 Adapt Dynarmic executable allocation to Apple W^X rules.
+  [ ] 4.6 Run fixed ARMv7 arithmetic, flags, branch, memory, invalidation, and
+          instruction-cache tests.
+  [ ] 4.7 Validate pause/resume, background/foreground, and second-boot caches.
+  [ ] 4.8 Fail through safe stop and diagnostics instead of crashing.
+  [?] 4.9 Consider integrated StikJIT/app-extension only after external flow and M6.
+  [?] 4.10 Measure an interpreter-only flavor; label it experimental if unusable.
 
-Çıkış kapısı:
-  [ ] Gerçek cihazda 30 dakika surface kaybı/crash olmadan test görüntüsü.
-  [ ] GPU feature raporu ve bilinen MoltenVK farkları belgeli.
-  [ ] Erken M2 probe sonuçları tam Vita3K renderer entegrasyonunda da korunuyor.
+Exit gate:
+  [ ] All ARM tests pass 20 consecutive times on the same device.
+  [ ] Missing, disabled, and broken JIT states are understandable.
+  [ ] Early M1 behavior remains valid inside full Vita3KCore.
 
-FAZ 6 — SANAL DOSYA SİSTEMİ, FIRMWARE VE GÜVENLİ IMPORT
-Amaç: Yasal kullanıcı içeriğini atomik ve anlaşılır biçimde kurmak.
+PHASE 5 — GRAPHICS: CAMetalLayer AND MOLTENVK
 
-  [ ] 6.1 İlk onboarding'de firmware durumu, JIT durumu ve depolama alanını göster.
-  [ ] 6.2 Files document picker ve security-scoped URL yaşam döngüsünü uygula.
-  [ ] 6.3 Destek matrisi:
-          - firmware PUP,
-          - archive .zip/.vpk/.vci,
-          - .pkg + kullanıcıdan zRIF,
-          - seçilmiş klasör içeriği.
-  [ ] 6.4 Import dosyasını önce staging'e kopyala; orijinal provider URL'sini uzun
-          işlemler boyunca açık tutmaya güvenme.
-  [ ] 6.5 Ön doğrulama: dosya türü/signature, boyut, boş alan, param.sfo, title ID,
-          bozuk archive, desteklenmeyen Vitamin/MaiDump açıklaması.
-  [ ] 6.6 Archive extraction güvenliği: path traversal, symlink, aşırı genişleme,
-          kısmi dosya ve iptal kontrolü.
-  [ ] 6.7 Kurulumu staging -> doğrulama -> atomik taşıma şeklinde yap; hata/iptalde
-          eski kurulum ve save verisine dokunma.
-  [ ] 6.8 Yeniden kurma, update ve DLC çakışmaları için onay ve rollback davranışı.
-  [ ] 6.9 Import progress: aşama adı, yüzde, kalan iş göstergesi, iptal ve tipli hata.
-  [ ] 6.10 Firmware/oyun/anahtarın uygulamayla verilmediğini net ve kısa açıkla.
-  [ ] 6.11 Depolama ekranı: games, firmware, saves, shader cache, logs, staging; güvenli
-           ayrı temizleme seçenekleri.
-  [ ] 6.12 Save export/import için atomik yedek; oyun silme varsayılanında save'i koru.
-  [ ] 6.13 Firmware inventory oluştur: kurulu sürüm, modüller, font package,
-           bütünlük/hash, eksik bileşen ve System Software boot readiness.
-  [ ] 6.14 Firmware değiştirme/güncelleme öncesi system partition snapshot ve
-           rollback; kullanıcı verisi/oyun/save partition'larını koru.
+  [ ] 5.1 Add a UIKit/MetalKit CAMetalLayer owner inside SwiftUI.
+  [ ] 5.2 Create an iOS DisplayHandle and VK_EXT_metal_surface.
+  [ ] 5.3 Audit MoltenVK device arm64 linkage, licenses, and signing.
+  [ ] 5.4 Present clear/triangle frames; test resize, rotation, scale, and lifecycle.
+  [ ] 5.5 Preserve portability enumeration, image swizzle, and fragment correctness.
+  [ ] 5.6 Recover from surface loss, background, lock, and scene reconnection.
+  [ ] 5.7 Default to aspect-fit 960x544; offer integer/stretch only deliberately.
+  [ ] 5.8 Diagnose initial GXM shader/frame failures with capture and validation.
+  [ ] 5.9 Version shader/pipeline cache under Caches and allow safe clearing.
+  [?] 5.10 Keep MoltenVK unless measured correctness/performance blocks it; create a
+           separate native-Metal plan only with recorded evidence.
 
-Çıkış kapısı:
-  [ ] Her destekli format için özgür/yapay fixture veya kullanıcı sağladığı yasal
-      içerikle başarı ve bozuk dosya testleri var.
-  [ ] Import iptali/crash simülasyonunda kütüphane bozulmuyor.
+Exit gate:
+  [ ] Physical device presents test imagery for 30 minutes without surface failure.
+  [ ] GPU capability report and known MoltenVK differences are documented.
+  [ ] Early M2 behavior remains valid in the full renderer.
 
-FAZ 7 — NATIVE KÜTÜPHANE VE AYARLAR UI'I
-Amaç: RPCS3 iOS örneğindeki sadelikte, fakat vita3kios'a özgü Apple-native UX.
+PHASE 6 — VFS, FIRMWARE, AND SAFE IMPORT
 
-  [ ] 7.1 iPhone için NavigationStack, iPad için NavigationSplitView düzeni.
-  [ ] 7.2 Boş durum: kısa açıklama + "İçe Aktar" + firmware/JIT readiness kartları.
-  [ ] 7.3 Oyun grid/list: ICON0, ad, title ID, sürüm, uyumluluk/son çalışma durumu.
-  [ ] 7.4 Arama, alfabetik/son oynanan/yeni eklenen sıralama ve filtre.
-  [ ] 7.5 Oyun detay sayfası: Play, bilgi, depolama, ayarlar, logs, update/DLC, sil.
-  [ ] 7.6 Ayar katmanları ve deterministik öncelik:
-          built-in defaults < global < mode profile < per-title override < session.
-  [ ] 7.7 Basic ve Advanced görünüm; ayar arama, kategori, açıklama, etkili değer,
-          override göstergesi, tek ayarı/kategoriyi/tüm profili sıfırlama.
-  [ ] 7.8 Ayrıntılı kategori kapsamı:
-          System/Firmware, Core/CPU/JIT, GPU/Renderer, Display/Frame pacing,
-          Audio, Input/Controller, Touch, Motion, Camera/Microphone, Network,
-          Storage/Cache, Compatibility, Performance HUD ve Developer/Logging.
-  [ ] 7.9 Her ayarın bridge capability sorgusu, geçerli aralığı, default'u,
-          restart/reboot gereksinimi ve uyumluluk uyarısı olacak.
-  [ ] 7.10 Invalid/eski config değerini güvenle migrate et; config schema version
-           ve atomik yazım kullan; bozuk config boot'u engellemesin.
-  [ ] 7.11 System Software Mode için ayrı profil; shell doğruluğunu bozabilecek
-           gelişmiş ayarlarda açık uyarı ve güvenli preset.
-  [ ] 7.12 Import/firmware sheet'leri ve non-blocking progress UI.
-  [ ] 7.13 Hatalar teknik kod + kullanıcı açıklaması + log paylaş butonuyla gösterilsin.
-  [ ] 7.14 Dynamic Type, VoiceOver labels, Reduce Motion, kontrast ve iPad keyboard/
-           controller navigation testleri.
-  [ ] 7.15 Türkçe ve İngilizce ilk yerelleştirme; kullanıcıya görünen string hardcode yok.
-  [ ] 7.16 SwiftUI preview'lar sentetik metadata kullanır; oyun/firmware gerektirmez.
+  [ ] 6.1 Show firmware, JIT, and storage readiness during onboarding.
+  [ ] 6.2 Implement document picker and security-scoped URL lifetime.
+  [ ] 6.3 Define supported VPK/ZIP/folder/PKG/firmware formats from measured support.
+  [ ] 6.4 Copy imports to staging; do not retain provider URLs as permanent storage.
+  [ ] 6.5 Preflight signature/type, size, free space, param.sfo, title ID, and conflicts.
+  [ ] 6.6 Defend extraction against traversal, symlinks, bombs, and cancellation.
+  [ ] 6.7 Use staging -> validation -> atomic move; clean failure and cancellation.
+  [ ] 6.8 Define reinstall/update/DLC confirmation and rollback.
+  [ ] 6.9 Provide non-blocking phase/progress/cancel and typed errors.
+  [ ] 6.10 State clearly that firmware, games, and keys are not bundled.
+  [ ] 6.11 Report storage by games, firmware, saves, cache, logs, and staging.
+  [ ] 6.12 Implement atomic save backup import/export; preserve saves by default.
+  [ ] 6.13 Inventory firmware version, modules, fonts, partitions, and readiness.
+  [ ] 6.14 Snapshot and recover system partitions before firmware updates.
 
-Çıkış kapısı:
-  [ ] Import edilmemiş, bir oyunlu ve çok oyunlu durumlar iPhone/iPad'de düzgün.
-  [ ] Kritik akışlar VoiceOver ve yalnızca kontrolcüyle kullanılabilir.
-  [ ] Global/mode/title ayar birleşimi otomatik testlerle deterministik.
+Exit gate:
+  [ ] Every supported format has a legal user-supplied or redistributable fixture.
+  [ ] Import cancellation/crash simulation never corrupts the library.
 
-FAZ 7A — PERFORMANS HUD'I VE CANLI TANILAMA
-Amaç: Her emülasyon oturumunda küçük, doğru ve düşük maliyetli sayaçlar göstermek.
+PHASE 7 — NATIVE LIBRARY AND SETTINGS UI
 
-  [ ] 7A.1 Render/core katmanından lock-free veya düşük çekişmeli metric snapshot API.
-  [ ] 7A.2 Compact varsayılan: guest FPS ve gerçek frame interval (ms).
-  [ ] 7A.3 Standard: guest/present FPS, rolling average ve 1% low. Detailed/custom:
-           host CPU frame time, GPU time/utilization mümkünse,
-           JIT cache, shader/pipeline compile, audio underrun, resolution,
-           thermal state ve frame pacing graph.
-  [ ] 7A.4 SwiftUI/render overlay topTrailing; safe-area padding, monospaced küçük
-           font, yüksek kontrast arka plan, allowsHitTesting(false).
-  [ ] 7A.5 Off/Compact/Detailed/Custom, opacity, scale, update interval ve metric seçimi.
-  [ ] 7A.6 Varsayılan refresh 2-4 Hz; FPS/frame hesabı render thread'i bloke etmesin.
-  [ ] 7A.7 Direct Game ve System Software oturumlarında aynı HUD altyapısı.
-  [ ] 7A.8 Screenshot/screen-recording'e HUD dahil etme seçeneği.
-  [ ] 7A.9 HUD'ın kapalı/açık ek yükünü ölç; hedef ek CPU yükü <= %1 ve frame-time
-           etkisi ölçüm gürültüsü içinde.
-  [ ] 7A.10 Metric validity mask kullan; ölçülmeyen CPU/GPU/emulation-speed alanı
-            tahmin edilip gösterilmesin. Oturum başladıktan en geç 1 sn sonra HUD görünsün.
+  [ ] 7.1 NavigationStack on iPhone and NavigationSplitView on iPad.
+  [ ] 7.2 Empty state with Import plus firmware/JIT readiness cards.
+  [ ] 7.3 Grid/list with icon, name, title ID, version, and last result.
+  [ ] 7.4 Search, sorting, and filters.
+  [ ] 7.5 Detail page: Play, info, storage, settings, logs, updates/DLC, delete.
+  [ ] 7.6 Deterministic built-in -> global -> mode -> title -> session precedence.
+  [ ] 7.7 Basic/Advanced/Developer views, search, descriptions, effective source,
+          reset, and restart/recreate indicators.
+  [ ] 7.8 Cover CPU/core, GPU/display, audio, controls, system, network, logging,
+          developer, and HUD categories.
+  [ ] 7.9 Drive every setting from bridge capability, range, default, and support.
+  [ ] 7.10 Version and safely migrate invalid/old configuration.
+  [ ] 7.11 Keep a separate System Software profile with correctness warnings.
+  [ ] 7.12 Non-blocking import and firmware sheets.
+  [ ] 7.13 Present technical code, user explanation, recovery, and log sharing.
+  [ ] 7.14 Validate Dynamic Type, VoiceOver, Reduce Motion, contrast, keyboard,
+          pointer, and controller navigation.
+  [ ] 7.15 Keep source and default UI copy in English with no hard-coded strings;
+          future localization must use dedicated resources and explicit review.
+  [ ] 7.16 Use synthetic metadata in SwiftUI previews.
 
-Çıkış kapısı:
-  [ ] Sağ üst Compact HUD iki boot modunda okunabilir ve doğru.
-  [ ] Sayaçlar Instruments/core ölçümleriyle tolerans içinde eşleşiyor.
-  [ ] MHUD tamam.
+Exit gate:
+  [ ] Empty, one-title, and many-title states work on iPhone and iPad.
+  [ ] Critical flows work with VoiceOver and controller-only navigation.
+  [ ] Settings precedence is deterministic in automated tests.
 
-FAZ 8 — BOOT, SESSION LIFECYCLE VE İLK HOMEbrew
-Amaç: Bir Vita uygulamasını core'dan gerçek render/audio/input döngüsüne taşımak.
+PHASE 7A — PERFORMANCE HUD AND LIVE DIAGNOSTICS
 
-  [ ] 8.1 Lisansı uygun, küçük ve yeniden dağıtılabilir Vita homebrew test içeriği seç;
-          lisans izin vermiyorsa binary'yi repoya koyma, hash+edinme adımını yaz.
-  [ ] 8.2 Firmware gerektirmeyen en küçük boot yoluyla loader/kernel checkpoint'e ulaş.
-  [ ] 8.3 JIT CPU thread, renderer thread, audio thread ve UI thread ownership'ini doğrula.
-  [ ] 8.4 İlk frame'i sun; shader compile progress/stutter loglarını ölç.
+  [ ] 7A.1 Add a lock-free or low-contention metric snapshot API.
+  [ ] 7A.2 Compact default: guest FPS and real frame interval.
+  [ ] 7A.3 Standard: guest/present FPS, rolling average, and 1% low. Detailed and
+           Custom add only supported CPU/GPU/JIT/memory/thermal/audio data.
+  [ ] 7A.4 Render at topTrailing with safe-area padding, small monospaced digits,
+           high contrast, and no input interception.
+  [ ] 7A.5 Off/Compact/Standard/Detailed/Custom, opacity, scale, interval, metrics.
+  [ ] 7A.6 Default 2–4 Hz UI refresh; never block render threads.
+  [ ] 7A.7 Use one HUD implementation for Direct Game and System Software.
+  [ ] 7A.8 Offer screenshot/recording inclusion only where technically controllable.
+  [ ] 7A.9 Measure Off/Compact overhead; target <=1% CPU and no meaningful p95 loss.
+  [ ] 7A.10 Use validity bits; never invent unsupported CPU/GPU/speed values. Show
+            the first valid HUD sample within one second after session data begins.
+
+Exit gate:
+  [ ] Top-right Compact HUD is readable and accurate in both boot modes.
+  [ ] Counters match core/Instruments evidence within documented tolerance.
+  [ ] MHUD complete.
+
+PHASE 8 — BOOT, SESSION LIFECYCLE, AND FIRST HOMEBREW
+
+  [ ] 8.1 Select small redistributable homebrew or document hash/acquisition only.
+  [ ] 8.2 Reach loader/kernel checkpoint through the smallest no-firmware path.
+  [ ] 8.3 Verify CPU, renderer, audio, and UI thread ownership.
+  [ ] 8.4 Present the first frame and measure shader compilation.
   [ ] 8.5 Pause overlay: Resume, Restart, Settings, Controls, Stop.
-  [ ] 8.6 Stop tüm thread/resource'ları süre sınırı içinde kapatır; tekrar boot çalışır.
-  [ ] 8.7 Incoming call/audio interruption/background/lock sırasında pause; foreground'da
-          kontrollü resume.
-  [ ] 8.8 Crash/boot failure sonrasında library UI'a geri dön ve tanı paketi sun.
-  [ ] 8.9 Art arda 20 boot/stop ve 2 saatlik homebrew soak test yap.
+  [ ] 8.6 Stop all resources within a deadline and support a second boot.
+  [ ] 8.7 Pause on interruption/background/lock and resume safely.
+  [ ] 8.8 Return to library with diagnostics after boot failure.
+  [ ] 8.9 Pass 20 boot/stop cycles and a two-hour homebrew soak.
 
-Çıkış kapısı:
-  [ ] Homebrew görüntülü biçimde boot ediyor ve tekrar boot güvenilir.
-  [ ] M4 tamam; görüntü/ses/input da varsa M5 tamam.
+Exit gate:
+  [ ] Homebrew boots visibly and repeatably.
+  [ ] M4 complete; M5 also complete when video/audio/input are usable.
 
-FAZ 8A — GERÇEK FIRMWARE SYSTEM SOFTWARE / LIVEAREA BOOT
-Amaç: Native vita3kios kütüphanesinden ayrı olarak gerçek Vita sistem yazılımını
-kullanıcının kurduğu firmware ile etkileşimli çalıştırmak.
+PHASE 8A — AUTHENTIC FIRMWARE SYSTEM SOFTWARE / LIVEAREA
 
-  [ ] 8A.1 Pinli upstream'de firmware install, LLE module load, user/process boot,
-           SceShell/LiveArea ve system app desteğinin gerçek durumunu belge.
-  [ ] 8A.2 "Tam cold boot" ile "HLE kernel üzerinde gerçek firmware shell process'i"
-           yollarını ayır; kullanıcıya sahte/recreated shell'i gerçek OS diye sunma.
-  [ ] 8A.3 Resmi firmware'den gereken shell executables, modules, resources, fonts,
-           registry ve system partitions için doğrulama manifesti oluştur.
-  [ ] 8A.4 System boot entry point: firmware version seçimi, user profile, virtual
-           partitions, kernel/HLE-LLE module policy ve boot arguments.
-  [ ] 8A.5 Eksik boot-chain/kernel/module/syscall/GPU/codec işlerini tek tek loglanan
-           checkpoint'lerle uygula; title-specific hack ile gizleme.
-  [ ] 8A.6 Gerçek firmware boot splash/system shell/LiveArea ilk frame ve etkileşim.
-  [ ] 8A.7 System apps: Settings, Content Manager vb. için capability matrisi;
-           çalışmayan uygulamaları açıkça işaretle.
-  [ ] 8A.8 Native dış kütüphane ile Vita LiveArea kütüphanesini birbirine karıştırma;
-           kullanıcı istediği boot modunu açıkça seçsin.
-  [ ] 8A.9 LiveArea içinden kurulu title başlat, exit sonrası shell'e geri dön;
-           Direct Game Mode ile aynı save/config depolarını güvenle paylaş.
-  [ ] 8A.10 Pause/resume, device lock, background, reboot ve firmware update sonrası
-            system partition/state bütünlüğü.
-  [ ] 8A.11 Firmware telifli hiçbir binary/resource'u repo, test fixture veya IPA'ya
-            koyma; test yalnızca kullanıcı tarafından sağlanan resmi PUP ile.
+  [ ] 8A.1 Audit firmware install, LLE load, user/process boot, SceShell, and apps.
+  [ ] 8A.2 Distinguish full cold boot from authentic firmware shell on an HLE kernel;
+           never market a recreated shell as the real operating environment.
+  [ ] 8A.3 Validate required executables, modules, resources, fonts, registry, partitions.
+  [ ] 8A.4 Define system boot entry: firmware, user, partitions, module policy, args.
+  [ ] 8A.5 Implement checkpointed boot/kernel/module/syscall/GPU/codec gaps without
+           hiding them behind title-specific hacks.
+  [ ] 8A.6 Reach authentic boot splash, shell/LiveArea first frame, and interaction.
+  [ ] 8A.7 Publish an honest capability matrix for Settings, Content Manager, etc.
+  [ ] 8A.8 Keep the native outer library and Vita LiveArea library distinct.
+  [ ] 8A.9 Launch a title from LiveArea and return, sharing save/config safely.
+  [ ] 8A.10 Preserve system state across pause, lock, background, reboot, and update.
+  [ ] 8A.11 Never commit or package firmware binaries/resources; test only with
+            user-supplied official firmware.
 
-Çıkış kapısı:
-  [ ] Gerçek firmware system UI etkileşimli açılıyor; recreated native UI sayılmıyor.
-  [ ] Shell içinden title boot ve shell'e dönüş çalışıyor.
-  [ ] MSYS tamam.
+Exit gate:
+  [ ] Authentic firmware UI is interactive; recreated native UI does not count.
+  [ ] Shell -> title -> shell works.
+  [ ] MSYS complete.
 
-FAZ 9 — INPUT, TOUCH, MOTION, AUDIO VE VITA ÖZELLİKLERİ
-Amaç: Vita'nın taşınabilir donanım girişlerini iOS'a kullanılabilir biçimde eşlemek.
+PHASE 9 — INPUT, TOUCH, MOTION, AUDIO, AND VITA FEATURES
 
-  [ ] 9.1 GameController ile DualSense/DualShock/Xbox/MFi discovery ve hot-plug.
-  [ ] 9.2 Vita button/axis mapping, deadzone, analog range ve kullanıcı remap.
-  [ ] 9.3 Native touch overlay: iki analog, d-pad, face, shoulder, Start/Select/PS.
-  [ ] 9.4 Overlay opacity/scale/position ve landscape sol/sağ el layout seçenekleri.
-  [ ] 9.5 Ön touch panel: oyun görüntüsü koordinatlarına aspect/safe-area dönüşümü.
-  [ ] 9.6 Arka touch panel için görünür/öğretilebilir gesture veya düzenlenebilir alanlar.
-  [ ] 9.7 Multi-touch çakışmaları, cancellation ve 120 Hz touch sampling testleri.
-  [ ] 9.8 CoreMotion gyroscope/accelerometer eksen, bias ve orientation dönüşümü.
-  [ ] 9.9 Kamera/mikrofon yalnızca oyun gerçekten isterse ve açık izin ekranıyla.
-  [ ] 9.10 AVAudioSession kategori/route/interruption; hoparlör, kulaklık, Bluetooth.
-  [ ] 9.11 Düşük gecikmeli PCM ring buffer; underrun/overrun ölçümü ve clock sync.
-  [ ] 9.12 Core Haptics/controller haptics yalnızca destek varsa ve kullanıcı açtıysa.
+  [ ] 9.1 GameController discovery and hot-plug for common controllers.
+  [ ] 9.2 Vita mapping, deadzones, ranges, and user remapping.
+  [ ] 9.3 Native touch overlay for analogs, d-pad, face, shoulder, Start/Select/PS.
+  [ ] 9.4 Overlay scale, opacity, position, and handed landscape layouts.
+  [ ] 9.5 Map front touch through render aspect and safe-area transforms.
+  [ ] 9.6 Teach and configure rear-touch gestures/regions.
+  [ ] 9.7 Test multi-touch cancellation and high-rate sampling.
+  [ ] 9.8 Map CoreMotion axes, bias, and orientation.
+  [ ] 9.9 Request camera/microphone only when a title requires them.
+  [ ] 9.10 Handle AVAudioSession routes and interruptions.
+  [ ] 9.11 Add low-latency PCM ring, underrun/overrun counters, and clock sync.
+  [ ] 9.12 Enable supported haptics only with user consent.
 
-Çıkış kapısı:
-  [ ] Test homebrew ile tüm temel düğme/analog/touch/audio yolları doğrulandı.
-  [ ] Controller çıkarma, route değişimi ve interruption crash oluşturmuyor.
-  [ ] M5 tamam.
+Exit gate:
+  [ ] Homebrew validates core buttons, analog, touch, motion, and audio.
+  [ ] Disconnects, route changes, and interruptions do not crash.
+  [ ] M5 complete.
 
-FAZ 10 — OYUN KÜTÜPHANESİNDEN UÇTAN UCA AKIŞ
-Amaç: Kullanıcının tek başına kullanabileceği ilk bütün ürün deneyimi.
+PHASE 10 — END-TO-END LIBRARY FLOW
 
-  [ ] 10.1 İlk açılış -> readiness -> firmware -> import -> detay -> boot akışı.
-  [ ] 10.2 Installed title taraması param.sfo ve ICON0 verilerini cache'ler; kaynak
-           dosya değişirse güvenli yeniler.
-  [ ] 10.3 Son oynanan, toplam süre ve son boot sonucu yalnızca cihazda tutulur.
-  [ ] 10.4 Per-game config title ID ile saklanır; oyun update/reimport'ta korunur.
-  [ ] 10.5 Silme: game/update/DLC/cache/save kapsamını açıkça göster; default save koru.
-  [ ] 10.6 Kullanıcı kaynaklı bozuk state'i repair/rescan ile düzeltme.
-  [ ] 10.7 En az bir yasal retail dump ile boot doğrulaması; test verisi repoya girmez.
-  [ ] 10.8 Uçtan uca UI testleri sentetik/import fixture'larıyla otomatikleştirilir.
+  [ ] 10.1 First launch -> readiness -> firmware -> import -> detail -> boot.
+  [ ] 10.2 Cache param.sfo and ICON0, refreshing safely when sources change.
+  [ ] 10.3 Keep last-played, duration, and boot result on-device only.
+  [ ] 10.4 Preserve per-title config across update and reimport.
+  [ ] 10.5 Explain delete scope and preserve saves by default.
+  [ ] 10.6 Repair/rescan user-caused inconsistent state.
+  [ ] 10.7 Validate at least one legally dumped retail title; never commit it.
+  [ ] 10.8 Automate end-to-end UI with synthetic/import fixtures.
 
-Çıkış kapısı:
-  [ ] Temiz kurulumdan oyunu ikinci kez boot etmeye kadar manuel checklist geçiyor.
-  [ ] M6 tamam.
+Exit gate:
+  [ ] Manual clean-install through second boot checklist passes.
+  [ ] M6 complete.
 
-FAZ 11 — DOĞRULUK, UYUMLULUK VE PERFORMANS
-Amaç: "Açılıyor" demosunu sürdürülebilir emülatör alpha'sına çevirmek.
+PHASE 11 — CORRECTNESS, COMPATIBILITY, AND PERFORMANCE
 
-  [ ] 11.1 Test matrisi oluştur: en az 2 iPhone sınıfı + 1 iPad sınıfı mümkün oldukça;
-           cihaz, RAM, SoC, iOS ve 60/120 Hz kaydedilir.
-  [ ] 11.2 Başlangıç içerik seti: homebrew + kullanıcıya ait farklı motor/API kullanan
-           küçük yasal dump'lar; binary/hash bilgisi özel test kaydında.
-  [ ] 11.3 Ölçümler: boot süresi, average/1% low FPS, frame time, CPU/GPU süresi,
-           peak/RSS memory, shader compile, audio underrun, battery/thermal.
-           Direct Game ve System Software Mode ayrı baseline olarak tutulur.
-  [ ] 11.4 Instruments: Time Profiler, Allocations/Leaks, Metal System Trace, Energy.
-  [ ] 11.5 iOS memory warning ve jetsam riskine karşı cache budget/eviction.
-  [ ] 11.6 Thermal serious/critical durumunda kullanıcı bildirimi ve güvenli politika.
-  [ ] 11.7 60/120 Hz frame pacing ve Vita timing doğruluğu; hız FPS'e bağlanmayacak.
-  [ ] 11.8 Release LTO/symbol/optimization ayarları; debug kabiliyetini ayrı flavor'da tut.
-  [ ] 11.9 Shader/pipeline cache sürümleme ve upstream commit uyumluluğu.
-  [ ] 11.10 Her oyun düzeltmesini upstream regression riskiyle test et; mümkünse
-            upstream'e genel düzeltme olarak gönder.
+  [ ] 11.1 Build a matrix of two iPhone classes and one iPad where possible.
+  [ ] 11.2 Use homebrew plus private legal dumps across different engines/APIs.
+  [ ] 11.3 Measure boot, average/1% low FPS, frame time, CPU/GPU, memory, shader,
+           audio, battery, and thermal separately for both boot modes.
+  [ ] 11.4 Run Time Profiler, Allocations/Leaks, Metal System Trace, and Energy.
+  [ ] 11.5 Define cache budgets and eviction for memory warning/jetsam risk.
+  [ ] 11.6 Notify and respond safely to serious/critical thermal state.
+  [ ] 11.7 Validate 60/120 Hz pacing and Vita timing independent of host FPS.
+  [ ] 11.8 Define release LTO/symbol/optimization and a separate debug flavor.
+  [ ] 11.9 Version caches against app/core/upstream compatibility.
+  [ ] 11.10 Test game fixes for regression and upstream general fixes.
 
-Çıkış kapısı:
-  [ ] Desteklenen minimum cihaz ve minimum boş depolama/RAM iddiası ölçüme dayanıyor.
-  [ ] Kritik leak/deadlock/tekrarlı boot problemi yok.
-  [ ] Alpha compatibility raporu yayınlanabilir.
+Exit gate:
+  [ ] Minimum device, RAM, and free-storage claims are measurement-backed.
+  [ ] No critical leak, deadlock, or repeated-boot failure.
+  [ ] Alpha compatibility report is publishable.
 
-FAZ 12 — TEST, CI, GÜVENLİK VE TANILAMA
-Amaç: Port büyürken regressions ve tehlikeli dosya işlemlerini önlemek.
+PHASE 12 — TESTING, CI, SECURITY, AND DIAGNOSTICS
 
-  [ ] 12.1 C++ unit tests: bridge state, errors, parsers, path ve lifecycle.
-  [ ] 12.2 Swift unit tests: library model, settings merge, import state machine.
-  [ ] 12.3 UI tests: onboarding, boş kütüphane, import error, details/settings.
-  [ ] 12.4 Fuzz/robustness: SFO/archive metadata ve path traversal yüzeyi.
-  [ ] 12.5 CI: format/lint, macOS core, iOS compile, unit tests, license manifest.
-  [ ] 12.6 İmzalama gerektiren device/JIT testleri local release checklist'te; sırlar
-           CI loguna veya repoya girmez.
-  [ ] 12.7 Crash tanı paketi: app/core/upstream sürüm, device/iOS, ayarlar, son log;
-           oyun yolu/zRIF/kişisel veri redaction.
-  [ ] 12.8 Private API ve binary architecture taraması.
-  [ ] 12.9 Dependency CVE/update ve lisans kontrol prosedürü.
-  [ ] 12.10 Reproducible release notu ve artifact checksum.
+  [ ] 12.1 C++ unit tests for bridge state, errors, parsers, paths, lifecycle.
+  [ ] 12.2 Swift unit tests for library, settings merge, and import state.
+  [ ] 12.3 UI tests for onboarding, empty library, errors, details, settings.
+  [ ] 12.4 Fuzz SFO/archive metadata and path handling.
+  [ ] 12.5 CI format/lint, macOS core, iOS compile, unit, and license gates.
+  [ ] 12.6 Keep signed device/JIT tests local; never expose secrets in CI.
+  [ ] 12.7 Produce redacted diagnostics with versions, device/OS, settings, logs.
+  [ ] 12.8 Scan for private APIs and invalid binary architectures.
+  [ ] 12.9 Maintain dependency CVE/update/license procedure.
+  [ ] 12.10 Publish reproducibility notes and checksums.
 
-Çıkış kapısı:
-  [ ] Ana testler temiz checkout'ta geçiyor.
-  [ ] Tanı paketi hassas içerik sızdırmıyor.
+Exit gate:
+  [ ] Main tests pass from a clean checkout.
+  [ ] Diagnostics contain no sensitive content.
 
-FAZ 13 — ALPHA UX, POLISH VE ERİŞİLEBİLİRLİK
-Amaç: Teknik portu güven veren Apple-native ürüne dönüştürmek.
+PHASE 13 — ALPHA UX, POLISH, AND ACCESSIBILITY
 
-  [ ] 13.1 Design system: system colors/materials, SF Symbols, spacing, typography.
-  [ ] 13.2 iPhone portrait library; oyun için desteklenen orientation geçişleri.
-  [ ] 13.3 iPad pointer/keyboard/controller focus ve çoklu pencere kararı.
-  [ ] 13.4 Import/boot sırasında uygulamayı kilitlemeyen progress ve cancel.
-  [ ] 13.5 Açıklayıcı readiness ekranı: firmware/JIT/controller/storage.
-  [ ] 13.6 Hata metinleri "ne oldu / ne yapabilirsin / log" düzeninde.
-  [ ] 13.7 VoiceOver, Dynamic Type, contrast, Reduce Motion ve renk-körü kontrolleri.
-  [ ] 13.8 App icon, launch screen ve ekran görüntüleri; Sony marka/asset ihlali yok.
-  [ ] 13.9 Privacy: varsayılan telemetry yok; dış ağ çağrıları açıkça belgeli.
-  [ ] 13.10 Kullanım/kurulum/oyun dump etme konusunda yalnızca yasal ve resmi yönlendirme.
+  [ ] 13.1 Apple-native design system using system colors, materials, and SF Symbols.
+  [ ] 13.2 iPhone portrait library and controlled gameplay orientation.
+  [ ] 13.3 iPad pointer/keyboard/controller focus and multiwindow decision.
+  [ ] 13.4 Non-blocking progress and cancellation for import/boot.
+  [ ] 13.5 Clear firmware/JIT/controller/storage readiness.
+  [ ] 13.6 Errors answer what happened, what to do, and where the log is.
+  [ ] 13.7 VoiceOver, Dynamic Type, contrast, Reduce Motion, color-blind checks.
+  [ ] 13.8 Original icon, launch screen, and screenshots without Sony assets.
+  [ ] 13.9 No telemetry by default; document every external network request.
+  [ ] 13.10 Provide only lawful, official guidance for setup and personal dumps.
 
-Çıkış kapısı:
-  [ ] M7 Alpha checklist'i ve bilinen sorunlar yayınlanabilir.
+Exit gate:
+  [ ] M7 Alpha checklist and known issues are publishable.
 
-FAZ 14 — PAKETLEME, AÇIK KAYNAK VE DAĞITIM
-Amaç: Kurulabilir artifact ile karşılık gelen kaynağı birlikte, şeffaf sunmak.
+PHASE 14 — PACKAGING, OPEN SOURCE, AND DISTRIBUTION
 
-  [ ] 14.1 Debug, Sideload Release ve olası Store flavor'larını kesin ayır.
-  [ ] 14.2 Unsigned/signed IPA üretim scripti; kişisel certificate/profile commit edilmez.
-  [ ] 14.3 IPA içinde sadece gerekli arm64 kod/assets; desktop dylib ve Qt bulunmadığını doğrula.
-  [ ] 14.4 GPL source offer/karşılık gelen kaynak, commit, submodule ve build talimatı.
-  [ ] 14.5 Third-party notices, privacy manifest, export compliance ve trademark metni.
-  [ ] 14.6 AltStore/SideStore source metadata yalnızca stabil alpha sonrasında.
-  [ ] 14.7 Kurulum rehberi: Developer Mode, signing, JIT readiness, Files import.
-  [?] 14.8 App Store karar kapısı:
-           - Güncel App Review 4.7 ve ilgili kurallar tekrar incelendi mi?
-           - Store imzasıyla JIT mümkün değilse interpreter ölçümü kabul edilebilir mi?
-           - İndirilebilir yazılım/metadata/yaş derecelendirmesi yükümlülüğü var mı?
-           - GPL dağıtımı ve store şartları ayrıca gözden geçirildi mi?
-           Koşullar sağlanmazsa Store flavor yayınlanmaz; sideload sürümü devam eder.
-  [ ] 14.9 Release checksum, changelog, known issues ve cihaz matrisi yayınla.
+  [ ] 14.1 Separate Debug, Sideload Release, and possible Store flavors.
+  [ ] 14.2 Script unsigned/signed IPA; never commit personal certificate/profile.
+  [ ] 14.3 Package only required arm64 code/assets; verify no desktop dylib or Qt.
+  [ ] 14.4 Ship GPL corresponding source offer, commits, submodules, and build guide.
+  [ ] 14.5 Third-party notices, privacy manifest, export, and trademark text.
+  [ ] 14.6 Publish AltStore/SideStore metadata only after a stable alpha.
+  [ ] 14.7 Document Developer Mode, signing, JIT readiness, and Files import.
+  [?] 14.8 Re-evaluate current App Review rules, JIT limits, interpreter viability,
+           downloadable-code/metadata obligations, age rating, GPL, and store terms.
+           Do not publish a Store flavor unless every requirement passes.
+  [ ] 14.9 Publish checksums, changelog, known issues, and device matrix.
 
-Çıkış kapısı:
-  [ ] Temiz cihaz kurulum rehberi başka bir testçi tarafından başarıyla uygulanıyor.
-  [ ] Binary'nin karşılık gelen kaynağı ve lisansları eksiksiz.
-  [ ] Version 1.0 için MSYS tamam; authentic firmware shell -> title -> shell
-      kabul testi geçmeden 1.0 etiketi oluşturulmaz.
-  [ ] M8 tamam.
+Exit gate:
+  [ ] A second tester completes clean-device installation.
+  [ ] Every binary has complete corresponding source and licenses.
+  [ ] Do not create version 1.0 before authentic shell -> title -> shell passes.
+  [ ] M8 complete.
 
-FAZ 15 — UPSTREAM SENKRONİZASYONU VE SÜREKLİ BAKIM
-Amaç: Tek seferlik fork yerine uzun ömürlü iOS portu.
+PHASE 15 — UPSTREAM SYNCHRONIZATION AND MAINTENANCE
 
-  [ ] 15.1 Pinli upstream güncelleme periyodu ve sorumlu checklist.
-  [ ] 15.2 Önce eski pin'de tüm regression suite, sonra yeni pin'de karşılaştırma.
-  [ ] 15.3 Upstream conflict'lerini özellik commit'lerine göre çöz; toplu kopyalama yok.
-  [ ] 15.4 Core API değişikliğinde bridge ABI version ve migration notu.
-  [ ] 15.5 Save/config/cache format migration testleri.
-  [ ] 15.6 Apple SDK/iOS/JIT/MoltenVK değişikliklerini her release öncesi yeniden doğrula.
-  [ ] 15.7 Uyumluluk raporları cihaz+commit+ayar ile tekrarlanabilir tutulur.
+  [ ] 15.1 Define upstream update cadence and owner checklist.
+  [ ] 15.2 Run regression suite on old pin, then compare the new pin.
+  [ ] 15.3 Resolve conflicts by feature commit; never bulk-copy source.
+  [ ] 15.4 Version bridge ABI and migration notes for core API changes.
+  [ ] 15.5 Test save/config/cache migrations.
+  [ ] 15.6 Revalidate Apple SDK, iOS, JIT, and MoltenVK every release.
+  [ ] 15.7 Keep compatibility reports reproducible by device, commit, and settings.
 
 ==============================================================================
-5. ANA RİSKLER VE ÖNCEDEN KARAR VERİLMİŞ TEPKİLER
+5. MAJOR RISKS AND PREDECIDED RESPONSES
 ==============================================================================
 
-R1 — iOS JIT kısıtı
-  Etki: JIT olmadan oyunlar çok yavaş olabilir veya Dynarmic çalışmayabilir.
-  Tepki: İzole JIT spike Faz 2A'da tam core/native UI yatırımından önce kapatılır;
-  Faz 4'te üretim core'una entegre edilir. Harici StikDebug birincil ilk yol;
-  uygulama JIT durumunu boot'tan önce açıkça gösterir.
+R1 — iOS JIT restrictions
+  Impact: Dynarmic may fail or run too slowly without JIT.
+  Response: close the isolated Phase 2A gate first; use external StikDebug as the
+  initial route; show JIT readiness before boot.
 
-R2 — Vita3K core ile Qt/desktop kodunun sıkı bağlı olması
-  Etki: iOS compile/link karmaşası.
-  Tepki: interface.cpp ve Android frontend desenlerinden UI'sız core API çıkarılır;
-  Qt iOS app'e sokulmaz.
+R2 — Tight Qt/desktop coupling
+  Impact: iOS compile/link complexity.
+  Response: derive a headless API from existing interface/Android patterns; never
+  put Qt in the iOS application.
 
-R3 — Vulkan özelliklerinin MoltenVK karşılığı
-  Etki: shader doğruluk hatası, eksik extension veya düşük performans.
-  Tepki: Upstream Apple renderer yolu başlangıç alınır; feature report + GPU capture.
-  Native Metal yalnızca somut, belgeli blokerde ayrı planla başlar.
+R3 — Vulkan/MoltenVK gaps
+  Impact: shader errors, missing extensions, or poor performance.
+  Response: start from upstream Apple Vulkan behavior, record capabilities and
+  captures, and consider native Metal only after a measured blocker.
 
-R4 — iOS sandbox/lifecycle
-  Etki: provider URL kaybı, background crash, bozuk import/save.
-  Tepki: staging+atomik taşıma, göreli kalıcı yollar, pause/stop state machine ve
-  interruption testleri.
+R4 — Sandbox and lifecycle
+  Impact: provider access loss, background failures, corrupt import/save state.
+  Response: staging and atomic moves, relative identities, lifecycle state machine,
+  and interruption/recovery tests.
 
-R5 — Bellek ve termal limit
-  Etki: jetsam, throttling, ses/frame düşmesi.
-  Tepki: gerçek cihaz Instruments ölçümü, cache budget, 1x güvenli varsayılan,
-  thermal/memory olaylarına kontrollü tepki.
+R5 — Memory and thermal limits
+  Impact: jetsam, throttling, audio/frame loss.
+  Response: physical-device Instruments evidence, budgets, conservative defaults,
+  and controlled response to pressure.
 
-R6 — Upstream'in hızlı değişmesi
-  Etki: port yamalarının çürümesi.
-  Tepki: submodule pin, küçük commitler, otomatik regression ve planlı sync.
+R6 — Fast upstream change
+  Impact: patch decay.
+  Response: exact submodule pin, small commits, regression tests, planned sync.
 
-R7 — Lisans/dağıtım
-  Etki: binary yayınlayamama veya kaynak yükümlülüğü ihlali.
-  Tepki: GPL kaynak eşleme, dependency manifest, üçüncü taraf notices ve Store'u
-  ayrı karar kapısı yapmak.
+R7 — Licensing and distribution
+  Impact: inability to distribute or GPL violation.
+  Response: corresponding source mapping, manifest, notices, and a separate Store gate.
 
-R8 — İçerik ve marka hukuku
-  Etki: proje/dağıtım riski.
-  Tepki: firmware/oyun/key yok; kullanıcı dump'ı; Sony ile bağlantısızlık metni;
-  resmi olmayan logoları/assetleri uygulamaya koymama.
+R8 — Content and trademarks
+  Impact: legal and project risk.
+  Response: no firmware/games/keys, user-owned dumps only, clear non-affiliation,
+  and no unauthorized Sony assets.
 
 ==============================================================================
-6. TEST POLİTİKASI
+6. TEST POLICY
 ==============================================================================
 
-Her fazda:
-  - Debug ve Release derlemesi mümkün olan yerde test edilir.
-  - Yeni uyarı, crash, hang ve veri kaybı regresyon sayılır.
-  - Simulator sonucu gerçek cihaz/JIT/GPU kanıtı yerine geçmez.
-  - Bir oyun için özel hack varsayılan core davranışına kanıtsız eklenmez.
-  - Test logunda app commit + upstream commit + cihaz/iOS + ayarlar bulunur.
+Every phase:
+  - Test Debug and Release where meaningful.
+  - Treat new warnings, crashes, hangs, and data loss as regressions.
+  - Simulator results never replace physical-device JIT/GPU evidence.
+  - Do not add a title-specific default hack without evidence.
+  - Logs include root commit, upstream commit, device/iOS, and settings.
 
-Minimum sürekli test grupları:
-  A. Parser/import fixtures (oyun içermeyen sentetik veriler)
-  B. Bridge lifecycle ve concurrency
+Continuous groups:
+  A. Synthetic parser/import fixtures
+  B. Bridge lifecycle and concurrency
   C. Dynarmic instruction/JIT smoke
   D. MoltenVK surface/frame smoke
-  E. Açık kaynak homebrew boot/input/audio
-  F. Kullanıcıya ait yasal retail dump manuel uyumluluk matrisi
-  G. Tekrarlı boot/stop, background/foreground, memory/thermal stress
+  E. Redistributable homebrew boot/input/audio
+  F. Private legal retail-dump compatibility matrix
+  G. Repeated boot/stop, lifecycle, memory, and thermal stress
 
 ==============================================================================
-7. İLK SONRAKİ OTURUMDA UYGULANACAK SIRA
+7. FIXED NEAR-TERM EXECUTION ORDER
 ==============================================================================
 
-Kullanıcının şimdi elle Xcode projesi açması gerekmiyor.
+The user must not create the product Xcode project yet.
 
-Bir sonraki uygulama oturumunun değişmez başlangıç sırası:
-  [x] A. Kök Git deposu ve temel dosyaları oluştur.
-  [x] B. Xcode developer path'i script seviyesinde sabitle ve toolchain raporu al.
-  [x] C. Vita3K official repo'yu recursive submodule olarak clone/pinle.
-  [x] D. Lisans ve dependency envanterini çıkar.
-  [x] E. Upstream macOS arm64 temiz baseline build/test yap.
-  [ ] F. Ürün uygulamasını kurmadan kontrollü Dynarmic JIT ve MoltenVK device
-          probe target'larını oluştur; gerçek cihaz kapılarını geç.
-  [ ] G. main/interface/Android katmanından core sınırını belge.
-  [ ] H. Ancak fizibilite ve core sınırı doğrulandıktan sonra kontrollü
-          Vita3KiOS SwiftUI Xcode
-          scaffold'unu oluştur.
-  [ ] I. İlk device probe aşamasında kullanıcı Xcode Team, benzersiz bundle ID ve
-          cihazdaki Developer Mode için devreye girer.
+  [x] A. Create root Git repository and foundation files.
+  [x] B. Pin script-local Xcode path and capture toolchain.
+  [x] C. Add and pin the recursive official Vita3K submodule.
+  [x] D. Inventory licenses and dependencies.
+  [x] E. Pass clean upstream macOS arm64 build/test/smoke.
+  [~] F. Build isolated Dynarmic and MoltenVK device probes and pass device gates.
+  [ ] G. Document the headless core boundary from main/interface/Android layers.
+  [ ] H. Create the controlled Vita3KiOS SwiftUI scaffold only after feasibility
+          and the core boundary are proven.
+  [ ] I. At the signed-device gate, the user selects an Xcode Team, unique bundle
+          prefix, and confirms Developer Mode.
 
-Neden Xcode projesi şimdi açılmıyor:
-  - Kök Git deposu ve upstream/core macOS baseline artık doğrulandı; sıradaki
-    kapı ürün uygulaması değil, iki küçük gerçek-cihaz fizibilite probe'udur.
-  - Xcode template'inin target, deployment, signing ve C++ bağlantı kararlarını
-    probe sonuçlarından önce ürün projesine kalıcılaştırmayacağız.
-  - Codex'in oluşturacağı Dynarmic ve MoltenVK probe target'ları ürün UI projesi
-    değildir. SwiftUI ürün shell'i core artifact/bridge sözleşmesine göre Faz 2B
-    kapısında kontrollü oluşturulacaktır.
+The generated probe Xcode projects under ignored Build/ are not the product
+project. Product target, deployment, signing, and C++ linkage decisions must be
+informed by probe evidence.
 
 ==============================================================================
-8. DOĞRULANMIŞ BAŞLANGIÇ KAYNAKLARI (2026-08-22 SNAPSHOT)
+8. VERIFIED STARTING REFERENCES — 2026-08-22 SNAPSHOT
 ==============================================================================
 
-  - Vita3K official repository:
-    https://github.com/Vita3K/Vita3K
-  - Vita3K official build guide:
-    https://github.com/Vita3K/Vita3K/blob/master/building.md
-  - Vita3K official quickstart/content formats:
-    https://vita3k.org/quickstart
-  - Vita3K iOS request status (long term/not priority snapshot):
-    https://github.com/Vita3K/Vita3K/issues/3803
-  - RPCS3 iOS experimental release reference:
+  - Vita3K repository: https://github.com/Vita3K/Vita3K
+  - Vita3K build guide: https://github.com/Vita3K/Vita3K/blob/master/building.md
+  - Vita3K quickstart: https://vita3k.org/quickstart
+  - Vita3K iOS request: https://github.com/Vita3K/Vita3K/issues/3803
+  - RPCS3 iOS experimental reference:
     https://github.com/XITRIX/RPCS3-iOS-Releases
-  - StikDebug official repository/JIT requirements:
-    https://github.com/StikDebug/StikDebug
-  - StikJIT framework reference:
-    https://github.com/StikDebug/StikJIT
-  - Apple App Review Guidelines, section 4.7:
+  - StikDebug: https://github.com/StikDebug/StikDebug
+  - StikJIT: https://github.com/StikDebug/StikJIT
+  - Apple App Review Guidelines:
     https://developer.apple.com/app-store/review/guidelines/
-  - Apple JIT entitlement documentation:
+  - Apple allow-jit entitlement:
     https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.allow-jit
-  - Apple MetalKit MTKView documentation:
-    https://developer.apple.com/documentation/metalkit/mtkview
-  - Apple Game Controller documentation:
+  - Apple MTKView: https://developer.apple.com/documentation/metalkit/mtkview
+  - Apple Game Controller:
     https://developer.apple.com/documentation/gamecontroller
 
 ==============================================================================
-9. YOL HARİTASI DEĞİŞİKLİK KAYDI
+9. ROADMAP CHANGE RECORD
 ==============================================================================
 
 2026-08-22 — v0.1
-  - İlk ayrıntılı yol haritası oluşturuldu.
-  - SwiftUI + C ABI + Vita3KCore + MoltenVK başlangıç mimarisi seçildi.
-  - JIT ve App Store yolları birbirinden ayrıldı.
-  - Kullanıcının şimdilik elle Xcode projesi açmaması kararlaştırıldı.
+  - Created the detailed roadmap.
+  - Selected SwiftUI + C ABI + Vita3KCore + MoltenVK architecture.
+  - Separated JIT and App Store paths.
+  - Decided not to create the product Xcode project yet.
 
 2026-08-22 — v0.2
-  - Faz 1 uygulaması başlatıldı.
-  - Direct Game Mode yanında authentic firmware SceShell/LiveArea tabanlı System
-    Software Mode zorunlu 1.0 hedefi olarak eklendi; firmware kurulumu ile gerçek
-    OS boot'un aynı şey olmadığı açıkça ayrıldı.
-  - Global/mode/title scope'lu ayrıntılı ayar mimarisi eklendi.
-  - Her iki boot modunda varsayılan açık, sağ üst Compact performans HUD'ı eklendi.
-  - System Software işi için erken Faz 2C fizibilite kapısı ve MSYS release blocker eklendi.
+  - Added authentic firmware-backed SceShell/LiveArea System Software Mode as a
+    mandatory 1.0 goal and separated firmware installation from operating-system boot.
+  - Added detailed global/mode/title settings and the top-right Compact HUD.
+  - Added early Phase 2C and made MSYS a release blocker.
 
 2026-08-22 — v0.3
-  - Faz 1 macOS arm64 Release build, 2/2 CTest ve izole GUI smoke kanıtları geçti.
-  - Xcode 27 classic-linker ve modern Boost imported-target uyumluluk yamaları
-    geçici upstream patch akışına eklendi.
-  - Artifact hash, pin, test ve smoke doğrulayıcıları tek belgelenmiş komut
-    zincirine bağlandı.
-  - M0'ın kapanışı ilk commit'ten temiz checkout tekrarına bırakıldı.
+  - Passed Phase 1 macOS arm64 Release build, 2/2 CTest, and GUI smoke.
+  - Added temporary Xcode 27 linker and Boost imported-target compatibility patches.
+  - Connected hash, pin, test, and smoke checks into one documented flow.
 
 2026-08-22 — v0.4
-  - İlk baseline commit'i e832ba908f58b90f9286d8197607b8c2be9f7819,
-    Monsdevo/vita3kios main dalından yeni bir recursive temiz klona alındı.
-  - Önbelleksiz Release build ve staged ad-hoc codesign, artefakt/pin kontrolleri,
-    2/2 CTest ve izole GUI smoke testi temiz klonda tekrar geçti.
-  - Faz 1 çıkış kapısı ile M0 kapatıldı; sıradaki çalışma Faz 2A gerçek cihaz
-    Dynarmic JIT ve MoltenVK probe kapısı olarak sabitlendi.
+  - Reproduced commit e832ba908f58b90f9286d8197607b8c2 from a new recursive
+    clean clone with uncached build, staged ad-hoc signing, hashes, tests, and smoke.
+  - Closed Phase 1 and M0; fixed Phase 2A as the next gate.
+
+2026-08-22 — v0.5
+  - Converted all roadmap text to English and made English-only repository text
+    an explicit project rule.
+  - Recorded the user repository as the only commit/push destination.
+  - Added isolated Dynarmic and MoltenVK device-probe scaffolding.
+  - Verified unsigned iPhoneOS arm64 Release builds for both probes.
+  - Kept M1/M2 open pending signed physical-device runtime evidence.

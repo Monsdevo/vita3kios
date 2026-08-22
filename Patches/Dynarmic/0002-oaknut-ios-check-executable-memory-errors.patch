@@ -1,0 +1,64 @@
+From: vita3kios contributors
+Subject: [PATCH 2/2] oaknut: report POSIX code-memory failures
+
+POSIX mmap reports failure with MAP_FAILED rather than nullptr.  The old check
+therefore allowed an invalid pointer to reach code generation.  Apple W^X
+transitions also ignored mprotect failures, turning a missing iOS JIT runtime
+permission into a later write or execute crash.
+
+Recognize MAP_FAILED and surface mmap/mprotect errno through std::system_error
+so the probe can return a controlled JSON failure at the exact stage.
+
+diff --git a/externals/oaknut/include/oaknut/code_block.hpp b/externals/oaknut/include/oaknut/code_block.hpp
+--- a/externals/oaknut/include/oaknut/code_block.hpp
++++ b/externals/oaknut/include/oaknut/code_block.hpp
+@@ -4,9 +4,11 @@
+ #pragma once
+ 
+ #include <algorithm>
++#include <cerrno>
+ #include <cstddef>
+ #include <cstdint>
+ #include <new>
++#include <system_error>
+ 
+ #if defined(_WIN32)
+ #    define NOMINMAX
+@@ -44,8 +46,16 @@ public:
+         m_memory = (std::uint32_t*)mmap(nullptr, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANON | MAP_PRIVATE, -1, 0);
+ #endif
+ 
++#if defined(_WIN32)
+         if (m_memory == nullptr)
+             throw std::bad_alloc{};
++#else
++        if (m_memory == MAP_FAILED) {
++            const int error_number = errno;
++            m_memory = nullptr;
++            throw std::system_error(error_number, std::generic_category(), "oaknut mmap");
++        }
++#endif
+     }
+ 
+     ~CodeBlock()
+@@ -75,7 +85,9 @@ public:
+ #if defined(__APPLE__) && !TARGET_OS_IPHONE
+         pthread_jit_write_protect_np(1);
+ #elif defined(__APPLE__) || defined(__NetBSD__) || defined(__OpenBSD__)
+-        mprotect(m_memory, m_size, PROT_READ | PROT_EXEC);
++        if (mprotect(m_memory, m_size, PROT_READ | PROT_EXEC) != 0) {
++            throw std::system_error(errno, std::generic_category(), "oaknut mprotect(PROT_READ|PROT_EXEC)");
++        }
+ #endif
+     }
+ 
+@@ -84,6 +96,8 @@ public:
+ #if defined(__APPLE__) && !TARGET_OS_IPHONE
+         pthread_jit_write_protect_np(0);
+ #elif defined(__APPLE__) || defined(__NetBSD__) || defined(__OpenBSD__)
+-        mprotect(m_memory, m_size, PROT_READ | PROT_WRITE);
++        if (mprotect(m_memory, m_size, PROT_READ | PROT_WRITE) != 0) {
++            throw std::system_error(errno, std::generic_category(), "oaknut mprotect(PROT_READ|PROT_WRITE)");
++        }
+ #endif
+     }

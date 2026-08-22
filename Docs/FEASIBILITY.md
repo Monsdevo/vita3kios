@@ -3,6 +3,22 @@
 Snapshot: official Vita3K commit
 `496939b602703951277263c7b3e60a9ae36879c1`, audited 2026-08-22.
 
+## Phase 2A compile evidence
+
+The isolated Dynarmic and MoltenVK Release targets compile and link for the
+physical-device iPhoneOS SDK as arm64-only application bundles. The Dynarmic
+target contains fixed ARMv7 arithmetic, flags, branch, callback-memory, code
+invalidation, cache-clear, and executable-memory tests. The MoltenVK target
+creates a UIKit-owned `CAMetalLayer`, builds a Vulkan surface and swapchain,
+records a clear pass, presents it, and emits a capability report.
+
+The verified MoltenVK input is the official v1.4.1 iOS archive with SHA-256
+`54336b90212c390ed5935c96460aed3bf651ad7d3c0f0e956586ce18e9c0b701`.
+Artifact inspection reports one arm64 slice and no Qt, host-machine, or dynamic
+MoltenVK dependency. The bundles are currently unsigned. No physical-device
+runtime result is claimed, and M1/M2 remain open until signed runs produce the
+required consecutive JIT and clear/triangle presentation evidence.
+
 ## Direct Game Mode
 
 Upstream's application path initializes an HLE kernel, mounts an installed

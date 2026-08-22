@@ -1,0 +1,32 @@
+From: vita3kios contributors
+Subject: [PATCH 1/2] dynarmic: use the generic exception handler on iOS
+
+The Mach exception implementation is a macOS fastmem facility.  Building it
+for iPhoneOS runs MIG during configuration, writes generated sources into the
+Dynarmic checkout, and installs a task exception port at runtime.  The early
+iOS A32 probe deliberately uses callback memory and does not need fastmem.
+
+Keep the existing Mach handler on Darwin/macOS and select the no-fastmem
+generic implementation on other Apple platforms, including iOS.
+
+diff --git a/src/dynarmic/CMakeLists.txt b/src/dynarmic/CMakeLists.txt
+--- a/src/dynarmic/CMakeLists.txt
++++ b/src/dynarmic/CMakeLists.txt
+@@ -444,7 +444,7 @@ endif()
+ 
+ if (WIN32)
+     target_sources(dynarmic PRIVATE backend/exception_handler_windows.cpp)
+-elseif (APPLE)
++elseif (APPLE AND CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+     find_path(MACH_EXC_DEFS_DIR "mach/mach_exc.defs")
+     if (NOT MACH_EXC_DEFS_DIR)
+         message(WARNING "macOS fastmem disabled: unable to find mach/mach_exc.defs")
+@@ -480,6 +480,8 @@ elseif (APPLE)
+             backend/exception_handler_macos_mig.c
+         )
+     endif()
++elseif (APPLE)
++    target_sources(dynarmic PRIVATE backend/exception_handler_generic.cpp)
+ elseif (UNIX)
+     if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+         target_link_libraries(dynarmic PRIVATE rt)
