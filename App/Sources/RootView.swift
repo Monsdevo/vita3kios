@@ -208,6 +208,8 @@ struct RootView: View {
                     .disabled(core.gameImportBusy || core.gameLibraryBusy)
             }
 
+            GameImportRequirementsCard()
+
             if core.games.isEmpty {
                 ContentUnavailableView {
                     Label("No Games", systemImage: "rectangle.stack")
@@ -248,6 +250,40 @@ struct RootView: View {
                     .foregroundStyle(.orange)
             }
         }
+    }
+}
+
+private struct GameImportRequirementsCard: View {
+    @State private var expanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Accepted now: extracted game folder", systemImage: "folder.fill")
+                    .font(.subheadline.weight(.semibold))
+
+                Text("Select the game root itself, or a parent folder containing exactly one game root.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Text("GAME_FOLDER/\n  eboot.bin\n  sce_sys/\n    param.sfo\n    icon0.png  (optional)")
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+
+                Label("Not accepted yet: VPK, ZIP, PKG, updates, or DLC", systemImage: "shippingbox")
+                    .font(.footnote)
+
+                Text("This build imports metadata and verifies the eboot container. It does not execute Vita guest code yet because the full Vita3K runtime is not linked.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 10)
+        } label: {
+            Label("Game Import Requirements", systemImage: "info.circle")
+                .font(.subheadline.weight(.semibold))
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 

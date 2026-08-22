@@ -41,6 +41,12 @@ no guest firmware instruction or interactive LiveArea frame is claimed. See
 [Docs/FIRMWARE_BOOTSTRAP.md](Docs/FIRMWARE_BOOTSTRAP.md) for the exact checkpoint,
 current blocker, and device test flow.
 
+The current game importer accepts only an extracted folder containing
+`eboot.bin` and `sce_sys/param.sfo`; `sce_sys/icon0.png` is optional. It may also
+accept one parent folder containing exactly one such game root. VPK, ZIP, PKG,
+updates, DLC, and retail license/decryption transactions are not implemented yet.
+Passing this import preflight does not currently imply playability.
+
 See [ROADMAP.txt](ROADMAP.txt) for the authoritative plan, acceptance gates,
 and current progress.
 

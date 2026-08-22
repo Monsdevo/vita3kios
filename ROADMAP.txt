@@ -837,3 +837,6 @@ remain informed by probe evidence.
     app-owned atomic imports, a native library, Direct Game checkpoints, a
     CAMetalLayer gameplay surface with pre-boot ABI attachment, the full Vita
     touch-control set, and a validity-tagged top-left performance HUD.
+  - Added an in-app native import-requirements card that separates the currently
+    accepted extracted-folder layout from formats and execution paths that are
+    not implemented yet.

@@ -49,6 +49,10 @@ VPK, ZIP, PKG, license, update, and DLC transactions remain later import slices.
 No game, license, key, decrypted executable, or copyrighted asset may be
 committed to this repository or included in a distributed IPA.
 
+For the first eventual runtime test, a small redistributable Vita homebrew is the
+lowest-risk target. Retail dumps may additionally require Vita3K's license and
+content-decryption installation path, which is not part of this folder preflight.
+
 ## Exact blocker
 
 The last successful checkpoint is `Game eboot SELF container verified`. The
