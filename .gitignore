@@ -1,0 +1,58 @@
+# macOS
+.DS_Store
+
+# Local secrets and signing
+*.mobileprovision
+*.p12
+*.cer
+*.mobiledevicepairing
+*.xcuserstate
+*.xccheckout
+xcuserdata/
+
+# Xcode and Swift
+DerivedData/
+*.xcresult
+*.ipa
+*.dSYM
+*.dSYM.zip
+.build/
+.swiftpm/
+
+# CMake and native build artifacts
+Build/
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake-build-*/
+CMakeUserPresets.json
+compile_commands.json
+*.a
+*.dylib
+*.framework
+*.xcframework
+
+# Local dependencies and tooling
+.cache/
+.ccache/
+.env
+
+# User-supplied copyrighted or private content
+Firmware/
+Games/
+Imports/
+Saves/
+TestContent/
+*.PUP
+*.pup
+*.vpk
+*.vci
+*.pkg
+*.rif
+*.zrif
+*.bin
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp

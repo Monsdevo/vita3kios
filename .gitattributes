@@ -1,0 +1,3 @@
+# Unified diffs necessarily contain context markers and source indentation that
+# look like whitespace errors when the patch file itself is first added.
+*.patch -whitespace

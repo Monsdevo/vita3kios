@@ -1,0 +1,5 @@
+# Vita3K 496939b602703951277263c7b3e60a9ae36879c1 macOS arm64 baseline
+# MoltenVK 1.4.1 (hash-pinned by upstream CMake)
+5ea0c259df7ded9a275444820f09cced54d6e5a7c7a31d262de62a5cdb7e15cf  External/Vita3K/build/macos-xcode/external/MoltenVK-macos.tar
+# Vita3K ffmpeg-core 02f4f26 / ffmpeg-macos-arm64.zip (not hash-pinned upstream)
+e4fbe69038663be71b9c4dd1432482925e30f1be212cde24b7a01019a8dfb8c3  External/Vita3K/build/macos-xcode/external/ffmpeg.zip

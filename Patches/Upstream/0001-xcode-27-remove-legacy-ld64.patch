@@ -1,0 +1,27 @@
+diff --git a/vita3k/CMakeLists.txt b/vita3k/CMakeLists.txt
+--- a/vita3k/CMakeLists.txt
++++ b/vita3k/CMakeLists.txt
+@@ -299,7 +299,7 @@ if(APPLE)
+ 		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${discord_dylib}" "$<TARGET_FILE_DIR:vita3k>/../Resources")
+ 	endif()
+-	set_target_properties(vita3k PROPERTIES LINK_FLAGS "-rpath @loader_path/../Frameworks/ -rpath @loader_path/../Resources/ -ld64")
++	set_target_properties(vita3k PROPERTIES LINK_FLAGS "-rpath @loader_path/../Frameworks/ -rpath @loader_path/../Resources/")
+ 	target_sources(vita3k PRIVATE Vita3K.icns)
+ 	set(MACOSX_BUNDLE_ICON_FILE Vita3K.icns)
+ 	set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.github.Vita3K.Vita3K")
+ 	set(MACOSX_BUNDLE_BUNDLE_NAME "Vita3K")
+@@ -312,12 +312,9 @@ if(APPLE)
+ 	qt_finalize_target(vita3k)
+ 	if(MACDEPLOYQT_EXECUTABLE)
+ 		add_custom_command(TARGET vita3k POST_BUILD
+-			COMMAND "${MACDEPLOYQT_EXECUTABLE}" "$<TARGET_FILE_DIR:vita3k>/../.." "$<$<CONFIG:Debug,RelWithDebInfo>:-no-strip>")
++			COMMAND "${MACDEPLOYQT_EXECUTABLE}" "$<TARGET_FILE_DIR:vita3k>/../.." "$<$<CONFIG:Debug,RelWithDebInfo>:-no-strip>" ${VITA3KIOS_MACDEPLOYQT_EXTRA_ARGS})
+ 	endif()
+ 
+-	add_custom_command(
+-		TARGET vita3k
+-		POST_BUILD
+-		COMMAND codesign --force --deep --preserve-metadata=entitlements,requirements,flags,runtime --sign - "$<TARGET_FILE_DIR:vita3k>/../..")
++	message(STATUS "Skipping in-place ad-hoc signing; vita3kios verifies a metadata-free staged copy")
+ elseif(LINUX)
+ 	include("${CMAKE_SOURCE_DIR}/cmake/generate_metainfo.cmake")
