@@ -116,7 +116,7 @@ struct RootView: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                 ReadinessCard(
                     title: "Firmware",
-                    detail: core.firmwareReady ? "Vita system modules are ready for Direct Game." : "Required before starting a game.",
+                    detail: core.firmwareReady ? "Vita support files are available." : "Optional for Direct Game compatibility.",
                     symbol: "internaldrive",
                     color: PlayStationAccent.red,
                     ready: core.firmwareReady
@@ -176,10 +176,16 @@ struct RootView: View {
                 .foregroundStyle(.secondary)
 
             if core.firmwareFileCount > 0 {
+                LabeledContent("Direct Game", value: core.firmwareReady ? "Ready" : "Not ready")
+                    .font(.subheadline)
+                LabeledContent("System Software", value: core.systemSoftwareReady ? "Shell ready" : "Shell prerequisites missing")
+                    .font(.subheadline)
                 LabeledContent("Inventory", value: "\(core.firmwareFileCount) files · \(ByteCountFormatter.string(fromByteCount: Int64(core.firmwareBytes), countStyle: .file))")
                     .font(.subheadline)
-                LabeledContent("Shell", value: core.shellPath)
-                    .font(.caption)
+                if !core.shellPath.isEmpty {
+                    LabeledContent("Shell", value: core.shellPath)
+                        .font(.caption)
+                }
             }
 
             if let error = core.error {
@@ -203,7 +209,7 @@ struct RootView: View {
                     core.bootSystemSoftware()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!core.firmwareReady || core.firmwareBusy)
+                .disabled(!core.systemSoftwareReady || core.firmwareBusy)
             }
 
             if core.bootCheckpoint != "Not started" {
@@ -309,7 +315,7 @@ private struct GameImportRequirementsCard: View {
                 Label("Not accepted yet: VPK, ZIP, PKG, updates, or DLC", systemImage: "shippingbox")
                     .font(.footnote)
 
-                Text("Direct Game uses the linked Vita3K loader, Dynarmic CPU, HLE services, and MoltenVK renderer. Installed firmware and JIT are required before play.")
+                Text("Direct Game uses the linked Vita3K loader, Dynarmic CPU, HLE services, and MoltenVK renderer. JIT is required; installed firmware may provide additional compatibility files.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -346,7 +352,7 @@ private struct GameLibraryRow: View {
             Spacer(minLength: 8)
             Button("Play", systemImage: "play.fill", action: play)
                 .buttonStyle(.borderedProminent)
-                .disabled(!core.firmwareReady || core.firmwareBusy)
+                .disabled(core.firmwareBusy)
         }
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

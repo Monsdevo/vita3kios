@@ -6,7 +6,7 @@ the subsequent research path.
 
 ## Implemented gate
 
-The current ABI v4 and native app can:
+The current ABI v5 and native app can:
 
 - import a user-selected extracted game directory through the Files picker;
 - accept either a direct game root or one container with exactly one game root;
@@ -29,6 +29,8 @@ The current ABI v4 and native app can:
   metrics and never invents FPS or frame-time values;
 - install and inventory a user-selected official firmware PUP through Vita3K's
   PUP decryption and FAT/exFAT extraction implementation;
+- distinguish Direct Game firmware support from the stricter System Software
+  shell prerequisites;
 - mount the installed `os0`, `pd0`, `sa0`, and `vs0` partitions into the
   app-owned runtime VitaFS without duplicating firmware data;
 - initialize the pinned Vita3K loader, HLE services, Dynarmic CPU, audio stack,
@@ -67,18 +69,20 @@ starts the guest main thread, and runs the MoltenVK render thread. The original
 iOS whole-cache W^X race was removed with separate writable and executable
 aliases for Dynarmic's code cache.
 
-The remaining acceptance gate is `First guest game frame presented`. Firmware
-was not installed during the last game run, so ABI v4 now requires an installed
-official firmware generation before Direct Game begins. The next device test
-must install the user's official PUP, repeat the boot, and distinguish missing
-system-module dependencies from any later title-specific compatibility issue.
+The remaining acceptance gate is `First guest game frame presented`. The last
+Minecraft run had no installed firmware, but it still reached the guest main
+thread because upstream treats failed `bootimage.skprx`, `sysmodule.skprx`, and
+selected firmware-module preloads as non-fatal. ABI v5 therefore does not impose
+an artificial firmware gate on Direct Game. An installed PUP is retained as a
+compatibility input, while JIT remains mandatory for guest execution.
 
 ## Device test for this gate
 
 1. Build, sign, and sideload the current app.
-2. Select **Install Official PUP** and allow Vita3K to install and inventory the
-   user-provided firmware.
-3. Enable JIT through the verified local sideload workflow.
+2. Optionally select **Install Official PUP** to provide the user-owned firmware
+   compatibility files used by some titles.
+3. Enable JIT through the verified local sideload workflow. A normal app launch
+   after installation does not enable JIT by itself.
 4. Tap **Import** in **Games** and select an extracted game directory.
 5. Confirm that the native library shows its title, title ID, version, size, and
    icon when available.

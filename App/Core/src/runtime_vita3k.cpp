@@ -91,15 +91,19 @@ bool PrepareRuntimePaths(const filesystem::path& supportRoot,
 
     for (const char* partition : {"os0", "pd0", "sa0", "vs0"}) {
         const auto source = firmwareRoot / partition;
-        if (!filesystem::is_directory(source, error) || error) return false;
         const auto destination = vitaRoot / partition;
+        const bool hasFirmwarePartition = !firmwareRoot.empty() &&
+            filesystem::is_directory(source, error) && !error;
         error.clear();
         if (filesystem::exists(destination, error) || filesystem::is_symlink(destination, error)) {
             error.clear();
             filesystem::remove_all(destination, error);
             if (error) return false;
         }
-        filesystem::create_directory_symlink(source, destination, error);
+        if (hasFirmwarePartition)
+            filesystem::create_directory_symlink(source, destination, error);
+        else
+            filesystem::create_directories(destination, error);
         if (error) return false;
     }
     filesystem::create_directories(runtimeRoot / "cache", error);

@@ -14,7 +14,7 @@ Milestones M0 through M3 are complete. The pinned Vita3K source builds for
 macOS and iPhoneOS arm64, Dynarmic JIT and MoltenVK have run on a physical
 iPhone, and the signed Apple-native app links and queries the Vita3K core.
 
-ABI v4 provides safe extracted-game inventory and import, bounded `param.sfo`
+ABI v5 provides safe extracted-game inventory and import, bounded `param.sfo`
 metadata parsing, authentic `eboot.bin` SELF preflight, typed Direct Game boot
 checkpoints, input state, and validity-tagged performance snapshots. The native
 gameplay surface owns a `CAMetalLayer`, attaches its drawable before
@@ -25,10 +25,15 @@ guest main-thread and render-thread execution; first guest-frame presentation
 remains the active Direct Game gate. See
 [Docs/DIRECT_GAME_BOOTSTRAP.md](Docs/DIRECT_GAME_BOOTSTRAP.md).
 
-ABI v4 also connects Vita3K's real PUP decryption and FAT/exFAT extraction path.
+ABI v5 also connects Vita3K's real PUP decryption and FAT/exFAT extraction path.
 An official user-selected PUP can be installed into an app-owned immutable
-VitaFS generation, inventoried, and mounted into Direct Game sessions. No guest
-firmware shell instruction or interactive LiveArea frame is claimed. See
+VitaFS generation, inventoried, and mounted into Direct Game sessions. Direct
+Game firmware readiness is intentionally separate from System Software shell
+readiness: missing `bootimage.skprx`, `sysmodule.skprx`, or SceShell blocks only
+the System Software experiment. Direct Game can also start without installed
+firmware because upstream treats missing preload modules as non-fatal, although
+firmware content can still affect title compatibility. No guest firmware shell
+instruction or interactive LiveArea frame is claimed. See
 [Docs/FIRMWARE_BOOTSTRAP.md](Docs/FIRMWARE_BOOTSTRAP.md) for the exact checkpoint,
 current blocker, and device test flow.
 

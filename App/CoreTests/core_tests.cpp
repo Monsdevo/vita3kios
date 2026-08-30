@@ -82,6 +82,14 @@ filesystem::path MakeSyntheticVitaFs(const filesystem::path& root) {
     return vita;
 }
 
+filesystem::path MakeDirectGameVitaFs(const filesystem::path& root) {
+    const auto vita = root / "direct-game-vita";
+    const std::vector<unsigned char> container{'S', 'C', 'E', 0, 1, 2, 3, 4};
+    WriteFile(vita / "os0/data/external/compatibility.bin", {1, 2, 3, 4});
+    WriteFile(vita / "vs0/sys/external/libc.suprx", container);
+    return vita;
+}
+
 filesystem::path MakeSyntheticGame(const filesystem::path& root) {
     const auto game = root / "Games/Generations/synthetic-game";
     const std::array<std::pair<std::string, std::string>, 5> fields{{
@@ -160,6 +168,7 @@ int main() {
 
     const auto fixtureRoot = MakeFixtureRoot();
     const auto vitaRoot = MakeSyntheticVitaFs(fixtureRoot);
+    const auto directGameVitaRoot = MakeDirectGameVitaFs(fixtureRoot);
     const auto gameRoot = MakeSyntheticGame(fixtureRoot / "data");
     assert(v3kios_core_initialize(handle, (fixtureRoot / "data").c_str()) == V3KIOS_RESULT_OK);
     assert(v3kios_core_initialize(handle, (fixtureRoot / "data").c_str()) ==
@@ -178,6 +187,17 @@ int main() {
     const auto installRoot = fixtureRoot / "data/Firmware/staging-test";
     assert(v3kios_core_install_firmware_pup(handle, pupPath.c_str(), installRoot.c_str()) ==
            V3KIOS_RESULT_UNSUPPORTED);
+
+    assert(v3kios_core_inventory_firmware(handle, directGameVitaRoot.c_str(), &inventory) ==
+           V3KIOS_RESULT_OK);
+    assert(inventory.state == V3KIOS_FIRMWARE_DIRECT_GAME_READY);
+    const std::string directGameFirmwareGeneration{inventory.generation_id};
+    v3kios_system_boot_report_v1 directFirmwareBootReport{};
+    directFirmwareBootReport.struct_size = sizeof(directFirmwareBootReport);
+    assert(v3kios_core_boot_system_software(handle, directGameFirmwareGeneration.c_str(),
+                                             &directFirmwareBootReport) ==
+           V3KIOS_RESULT_FIRMWARE_NOT_READY);
+    assert(directFirmwareBootReport.blocker == V3KIOS_BOOT_BLOCKER_FIRMWARE_NOT_SELECTED);
 
     assert(v3kios_core_inventory_firmware(handle, vitaRoot.c_str(), &inventory) ==
            V3KIOS_RESULT_OK);

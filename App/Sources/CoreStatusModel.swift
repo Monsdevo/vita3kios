@@ -31,13 +31,14 @@ final class CoreStatusModel {
     private(set) var jitEnabled = false
     private(set) var firmwareBusy = false
     private(set) var firmwareReady = false
+    private(set) var systemSoftwareReady = false
     private(set) var firmwareVersion = "Not installed"
     private(set) var firmwareGeneration = ""
     private(set) var firmwarePartitions: UInt32 = 0
     private(set) var firmwareFileCount: UInt32 = 0
     private(set) var firmwareBytes: UInt64 = 0
     private(set) var shellPath = ""
-    private(set) var firmwareDetail = "Install an official PlayStation Vita firmware PUP before starting a game."
+    private(set) var firmwareDetail = "Firmware is optional for Direct Game compatibility and required for System Software research."
     private(set) var games: [GameLibraryItem] = []
     private(set) var gameImportBusy = false
     private(set) var gameLibraryBusy = false
@@ -194,15 +195,6 @@ final class CoreStatusModel {
             error = "The imported game container is unavailable."
             return
         }
-        guard firmwareReady else {
-            activeGame = game
-            directBootCheckpoint = "Game eboot SELF container verified"
-            directBootBlocker = "PlayStation Vita firmware is not installed"
-            directBootDetail = "Install an official PlayStation Vita firmware PUP before starting a game."
-            error = "Firmware must be installed before starting a game."
-            writeDirectGameReport(result: V3KIOS_RESULT_FIRMWARE_NOT_READY)
-            return
-        }
         refreshJITStatus()
         guard jitEnabled else {
             activeGame = game
@@ -314,7 +306,7 @@ final class CoreStatusModel {
     }
 
     func bootSystemSoftware() {
-        guard firmwareReady, !firmwareGeneration.isEmpty else {
+        guard systemSoftwareReady, !firmwareGeneration.isEmpty else {
             error = "A shell-ready firmware generation must be imported first."
             return
         }
@@ -447,6 +439,7 @@ final class CoreStatusModel {
 
     private func apply(_ snapshot: FirmwareInventorySnapshot) {
         firmwareReady = snapshot.ready
+        systemSoftwareReady = snapshot.systemSoftwareReady
         firmwareVersion = snapshot.version
         firmwareGeneration = snapshot.generation
         firmwarePartitions = snapshot.partitionMask
@@ -512,6 +505,7 @@ final class CoreStatusModel {
             "mode": "system-software",
             "timestamp": ISO8601DateFormatter().string(from: Date()),
             "firmwareReady": firmwareReady,
+            "systemSoftwareReady": systemSoftwareReady,
             "firmwareVersion": firmwareVersion,
             "firmwareGeneration": firmwareGeneration,
             "partitionMask": firmwarePartitions,
@@ -739,7 +733,9 @@ final class CoreStatusModel {
             v3kios_core_inventory_firmware(handle, $0, &inventory)
         }
         return FirmwareInventorySnapshot(
-            ready: inventory.state == V3KIOS_FIRMWARE_SHELL_READY,
+            ready: inventory.state == V3KIOS_FIRMWARE_DIRECT_GAME_READY ||
+                inventory.state == V3KIOS_FIRMWARE_SHELL_READY,
+            systemSoftwareReady: inventory.state == V3KIOS_FIRMWARE_SHELL_READY,
             version: copyString(inventory.version_text),
             generation: copyString(inventory.generation_id),
             partitionMask: inventory.partition_mask,
@@ -774,6 +770,7 @@ final class CoreStatusModel {
             "platform": platform,
             "operatingSystem": ProcessInfo.processInfo.operatingSystemVersionString,
             "allocatorSelfTestPassed": allocatorTestPassed,
+            "jitEnabledAtReportTime": jitEnabled,
         ]
 
         do {
@@ -876,6 +873,7 @@ enum VitaInputButton {
 
 private struct FirmwareInventorySnapshot: Sendable {
     let ready: Bool
+    let systemSoftwareReady: Bool
     let version: String
     let generation: String
     let partitionMask: UInt32

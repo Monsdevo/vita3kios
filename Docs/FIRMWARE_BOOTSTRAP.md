@@ -2,7 +2,7 @@
 
 ## What this gate implements
 
-The ABI v4 firmware bootstrap is a real, content-backed installation and
+The ABI v5 firmware bootstrap is a real, content-backed installation and
 preflight path for Direct Game and System
 Software Mode. It does not draw a native imitation of LiveArea and it never
 ships Sony content.
@@ -15,7 +15,7 @@ The current app can:
 - copy a user-selected extracted VitaFS into an app-owned staging directory;
 - reject symlinks, missing partition layouts, unreadable files, excessive entry
   counts, and invalid SceShell containers;
-- atomically promote a shell-ready import to an immutable firmware generation;
+- atomically promote a Direct Game-ready import to an immutable firmware generation;
 - inventory `os0`, `pd0`, `sa0`, and `vs0` without storing the provider path;
 - locate the authentic firmware-provided `sce_shell.self` instead of using the
   desktop Qt LiveArea widget;
@@ -24,9 +24,11 @@ The current app can:
 - emit a typed last checkpoint and blocker through the C ABI and a redacted JSON
   report in the app Documents directory.
 
-Firmware installation is now part of the linked core, but an interactive guest
-SceShell is not yet running. The `SYSTEM_SOFTWARE` capability remains disabled
-until a firmware guest main thread and guest-rendered frame are proven.
+Firmware installation is now part of the linked core. Direct Game readiness
+requires usable `os0` and `vs0` content; it does not require the stricter
+`bootimage.skprx`, `sysmodule.skprx`, and SceShell combination. Those remain
+System Software-only prerequisites. The `SYSTEM_SOFTWARE` capability remains
+disabled until a firmware guest main thread and guest-rendered frame are proven.
 
 ## Supported inputs at this gate
 
@@ -47,9 +49,9 @@ to this repository.
 2. Enable JIT using the already verified sideload workflow.
 3. Open **Import Firmware** and choose **Install Official PUP**. Select the
    user's official firmware file.
-4. Wait for the inventory summary. A ready generation reports its version, file
-   count, storage size, and relative SceShell path.
-5. Tap **Boot System Software**.
+4. Wait for the inventory summary. A Direct Game-ready generation reports its
+   version, file count, and storage size. Shell readiness is reported separately.
+5. Tap **Boot System Software** only when its separate shell status is ready.
 6. Confirm that the checkpoint is `SceShell SELF container verified`; interactive
    SceShell execution remains a later System Software engineering gate.
 7. Export `system-software-preflight-report.json` from the app Documents

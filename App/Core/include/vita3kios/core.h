@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define VITA3KIOS_CORE_ABI_VERSION 4U
+#define VITA3KIOS_CORE_ABI_VERSION 5U
 
 typedef uint64_t v3kios_core_handle_t;
 
@@ -57,7 +57,8 @@ typedef enum v3kios_firmware_state_v1 {
     V3KIOS_FIRMWARE_ABSENT = 0,
     V3KIOS_FIRMWARE_PUP_VALIDATED = 1,
     V3KIOS_FIRMWARE_INVENTORIED = 2,
-    V3KIOS_FIRMWARE_SHELL_READY = 3
+    V3KIOS_FIRMWARE_DIRECT_GAME_READY = 3,
+    V3KIOS_FIRMWARE_SHELL_READY = 4
 } v3kios_firmware_state_v1;
 
 typedef enum v3kios_firmware_partition_v1 {

@@ -14,7 +14,8 @@ struct SettingsView: View {
 
                 Section("Firmware") {
                     LabeledContent("Version", value: core.firmwareVersion)
-                    LabeledContent("System modules", value: core.firmwareReady ? "Installed" : "Not installed")
+                    LabeledContent("Direct Game firmware", value: core.firmwareReady ? "Available" : "Optional")
+                    LabeledContent("System Software shell", value: core.systemSoftwareReady ? "Ready" : "Not ready")
                     LabeledContent("PUP validation", value: availability(CoreCapability.firmwarePUPPreflight))
                     LabeledContent("PUP installation", value: availability(CoreCapability.firmwarePUPInstall))
                     LabeledContent("Partition inventory", value: availability(CoreCapability.firmwareInventory))

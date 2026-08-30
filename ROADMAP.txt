@@ -1,5 +1,5 @@
 vita3kios — MASTER ROADMAP
-Version: 0.10
+Version: 0.11
 Created: 2026-08-22
 Status: M0 COMPLETE — DIRECT GAME MODE IS THE PRIMARY ACTIVE DELIVERY PATH
 
@@ -53,9 +53,10 @@ CURRENT STATUS
   [~] M1 and M2 remain open until their repeated physical-device probe gates pass.
   [x] M3 is complete: the full Vita3KCore arm64 binary links, launches, and returns
       version/capability data in the signed physical-device app.
-  [x] ABI v4 validates and installs official PUP containers and inventories app-owned extracted
+  [x] ABI v5 validates and installs official PUP containers and inventories app-owned extracted
       VitaFS and game generations using only synthetic/open fixtures in automated
-      tests. Direct Game reaches a verified eboot SELF container.
+      tests. Direct Game firmware readiness is independent from System Software
+      shell readiness, and firmware is not an artificial Direct Game boot gate.
   [~] System Software boot reaches the authentic SceShell SELF-container
       checkpoint. Its separate shell/process/service execution path is not
       implemented; no guest firmware frame is claimed yet.
@@ -481,7 +482,7 @@ Exit gate:
 
 PHASE 7A — PERFORMANCE HUD AND LIVE DIAGNOSTICS
 
-  [~] 7A.1 Add a lock-free or low-contention metric snapshot API. ABI v4 exposes a
+  [~] 7A.1 Add a lock-free or low-contention metric snapshot API. ABI v5 exposes a
            validity-tagged snapshot; live runtime counters remain pending.
   [~] 7A.2 Compact default: guest FPS and real frame interval. The compact surface
            exists and shows unavailable values honestly until the runtime publishes.
@@ -513,11 +514,17 @@ PHASE 8 — BOOT, SESSION LIFECYCLE, AND FIRST HOMEBREW
 
   [ ] 8.1 Select small redistributable homebrew or document hash/acquisition only.
   [x] 8.2 CANCELLED: Reach the loader/kernel checkpoint through a no-firmware path.
-          The experiment reached Minecraft's guest main thread but no frame, proving
-          that Direct Game must mount installed Vita system modules.
+          The experiment reached Minecraft's guest main thread but no frame. It
+          proved that installed firmware is not a strict upstream startup gate;
+          the first-frame blocker remains unresolved.
   [~] 8.2A Install an official user-supplied PUP through ABI v4, mount its immutable
            partitions into the runtime VitaFS, and repeat the physical-device game
-           boot. Implementation and signed build pass; user-firmware evidence is next.
+           boot. Real extraction ran on device; shell-only readiness incorrectly
+           rejected the result and is replaced by 8.2B.
+  [x] 8.2B Separate optional Direct Game firmware support from strict System Software
+           shell readiness. ABI v5 accepts usable os0/vs0 content without requiring
+           bootimage.skprx, sysmodule.skprx, or SceShell, and permits a no-firmware
+           Direct Game attempt. Host tests pass; the signed device retest is next.
   [~] 8.3 Verify CPU, renderer, audio, and UI thread ownership. ABI seams and a
           native CAMetalLayer owner exist; runtime thread ownership remains pending.
   [ ] 8.4 Present the first frame and measure shader compilation.
@@ -562,7 +569,7 @@ PHASE 9 — INPUT, TOUCH, MOTION, AUDIO, AND VITA FEATURES
   [ ] 9.1 GameController discovery and hot-plug for common controllers.
   [ ] 9.2 Vita mapping, deadzones, ranges, and user remapping.
   [~] 9.3 Native touch overlay for analogs, d-pad, face, shoulder, Start/Select/PS.
-          All listed controls submit normalized ABI v4 snapshots; runtime mapping,
+          All listed controls submit normalized ABI v5 snapshots; runtime mapping,
           multitouch stress testing, and customization remain pending. L/R use
           compact shoulder capsules directly above their controller clusters.
   [ ] 9.4 Overlay scale, opacity, position, and handed landscape layouts.
@@ -882,3 +889,13 @@ remain informed by probe evidence.
     report instead of allowing a misleading black-screen session.
   - Built, signed, installed, and launched ABI v4 on Bartu's iPhone. The next gate
     is a user-supplied official PUP installation followed by first-frame testing.
+
+2026-08-30 — v0.11
+  - Corrected an invalid coupling between Direct Game firmware support and the
+    stricter System Software boot-module/SceShell readiness gate.
+  - Added ABI v5 Direct Game firmware readiness, accepted the measured PUP's
+    usable os0/vs0 extraction, and kept missing bootimage/sysmodule as a System
+    Software-only blocker.
+  - Restored upstream-compatible optional-firmware Direct Game boot while keeping
+    JIT mandatory and explicitly reporting that a normal install/launch does not
+    enable JIT.

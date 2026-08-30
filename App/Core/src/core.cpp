@@ -76,6 +76,11 @@ bool IsJITEnabled() {
 #endif
 }
 
+bool IsDirectGameFirmwareReady(const v3kios_firmware_state_v1 state) {
+    return state == V3KIOS_FIRMWARE_DIRECT_GAME_READY ||
+           state == V3KIOS_FIRMWARE_SHELL_READY;
+}
+
 struct InventoryData {
     v3kios_firmware_state_v1 state = V3KIOS_FIRMWARE_ABSENT;
     std::uint32_t partitionMask = 0;
@@ -747,6 +752,7 @@ extern "C" v3kios_result_v1 v3kios_core_inventory_firmware(
         next.generationId = GenerationId(hash);
         const bool partitionsReady =
             (next.partitionMask & RequiredSystemPartitionMask) == RequiredSystemPartitionMask;
+        const bool directGameReady = partitionsReady && next.fileCount > 0;
         const bool bootModulesReady =
             filesystem::is_regular_file(next.root / "os0/kd/bootimage.skprx") &&
             filesystem::is_regular_file(next.root / "os0/kd/sysmodule.skprx");
@@ -754,23 +760,28 @@ extern "C" v3kios_result_v1 v3kios_core_inventory_firmware(
                                 IsExecutableContainer(next.root / next.shellRelativePath);
         if (partitionsReady && bootModulesReady && shellReady) {
             next.state = V3KIOS_FIRMWARE_SHELL_READY;
-            next.detail = "Required partitions, boot modules, and the authentic SceShell container are present.";
+            next.detail = "Firmware is ready for Direct Game and contains the System Software shell prerequisites.";
+        } else if (directGameReady) {
+            next.state = V3KIOS_FIRMWARE_DIRECT_GAME_READY;
+            if (!bootModulesReady) {
+                next.detail = "Firmware is ready for Direct Game. System Software bootimage.skprx or sysmodule.skprx is unavailable.";
+            } else if (next.shellRelativePath.empty()) {
+                next.detail = "Firmware is ready for Direct Game. No authentic sce_shell.self was found for System Software.";
+            } else {
+                next.detail = "Firmware is ready for Direct Game. The System Software shell container is not readable.";
+            }
         } else if (!partitionsReady) {
-            next.detail = "The os0 and vs0 partitions are required for System Software boot.";
-        } else if (!bootModulesReady) {
-            next.detail = "Required os0 bootimage.skprx or sysmodule.skprx is missing.";
-        } else if (next.shellRelativePath.empty()) {
-            next.detail = "No authentic sce_shell.self executable was found under vs0.";
+            next.detail = "The os0 and vs0 partitions are required for a firmware-backed Direct Game session.";
         } else {
-            next.detail = "The located sce_shell.self is not a readable SELF or ELF container.";
+            next.detail = "The firmware partitions do not contain usable Direct Game support files.";
         }
         context->probeInventory = std::move(next);
-        if (context->probeInventory.state == V3KIOS_FIRMWARE_SHELL_READY)
+        if (IsDirectGameFirmwareReady(context->probeInventory.state))
             context->inventory = context->probeInventory;
-        context->lifecycle = context->inventory.state == V3KIOS_FIRMWARE_SHELL_READY
+        context->lifecycle = IsDirectGameFirmwareReady(context->inventory.state)
             ? V3KIOS_LIFECYCLE_FIRMWARE_READY : V3KIOS_LIFECYCLE_INITIALIZED;
         FillInventory(context->probeInventory, *out_inventory);
-        return context->probeInventory.state == V3KIOS_FIRMWARE_SHELL_READY
+        return IsDirectGameFirmwareReady(context->probeInventory.state)
             ? V3KIOS_RESULT_OK : V3KIOS_RESULT_FIRMWARE_NOT_READY;
     } catch (...) {
         return V3KIOS_RESULT_INTERNAL_ERROR;
@@ -929,14 +940,6 @@ extern "C" v3kios_result_v1 v3kios_core_boot_direct_game(
             return V3KIOS_RESULT_INVALID_GAME;
         }
         out_report->checkpoint = V3KIOS_DIRECT_BOOT_CHECKPOINT_EBOOT_CONTAINER_VERIFIED;
-        if (context->inventory.state != V3KIOS_FIRMWARE_SHELL_READY ||
-            context->inventory.root.empty()) {
-            context->directBootDetail =
-                "Install an official PlayStation Vita firmware PUP before starting a game.";
-            out_report->blocker = V3KIOS_DIRECT_BOOT_BLOCKER_FIRMWARE_NOT_READY;
-            out_report->detail = context->directBootDetail.c_str();
-            return V3KIOS_RESULT_FIRMWARE_NOT_READY;
-        }
         if (!IsJITEnabled()) {
             context->directBootDetail =
                 "JIT is not enabled for this process. Enable JIT with StikDebug, then reopen the game.";
@@ -964,12 +967,12 @@ extern "C" v3kios_result_v1 v3kios_core_boot_direct_game(
         out_report->detail = context->directBootDetail.c_str();
         context->lifecycle = runtimeResult.result == V3KIOS_RESULT_OK
             ? V3KIOS_LIFECYCLE_RUNNING
-            : (context->inventory.state == V3KIOS_FIRMWARE_SHELL_READY
+            : (IsDirectGameFirmwareReady(context->inventory.state)
                 ? V3KIOS_LIFECYCLE_FIRMWARE_READY : V3KIOS_LIFECYCLE_INITIALIZED);
         return runtimeResult.result;
     } catch (const std::exception& exception) {
         const std::lock_guard<std::mutex> lock{context->mutex};
-        context->lifecycle = context->inventory.state == V3KIOS_FIRMWARE_SHELL_READY
+        context->lifecycle = IsDirectGameFirmwareReady(context->inventory.state)
             ? V3KIOS_LIFECYCLE_FIRMWARE_READY : V3KIOS_LIFECYCLE_INITIALIZED;
         context->directBootDetail =
             std::string{"Vita3K raised an exception during Direct Game boot: "} + exception.what();
@@ -978,7 +981,7 @@ extern "C" v3kios_result_v1 v3kios_core_boot_direct_game(
         return V3KIOS_RESULT_INTERNAL_ERROR;
     } catch (...) {
         const std::lock_guard<std::mutex> lock{context->mutex};
-        context->lifecycle = context->inventory.state == V3KIOS_FIRMWARE_SHELL_READY
+        context->lifecycle = IsDirectGameFirmwareReady(context->inventory.state)
             ? V3KIOS_LIFECYCLE_FIRMWARE_READY : V3KIOS_LIFECYCLE_INITIALIZED;
         context->directBootDetail =
             "Vita3K raised a non-standard exception during Direct Game boot.";
@@ -1062,7 +1065,7 @@ extern "C" v3kios_result_v1 v3kios_core_stop_session(const v3kios_core_handle_t 
         return V3KIOS_RESULT_INVALID_STATE;
     v3kios::runtime::StopSession();
     context->inputState = {};
-    context->lifecycle = context->inventory.state == V3KIOS_FIRMWARE_SHELL_READY
+    context->lifecycle = IsDirectGameFirmwareReady(context->inventory.state)
         ? V3KIOS_LIFECYCLE_FIRMWARE_READY : V3KIOS_LIFECYCLE_INITIALIZED;
     return V3KIOS_RESULT_OK;
 }

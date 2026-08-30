@@ -36,12 +36,12 @@ depends on:
 - the existing logging and filesystem abstractions.
 
 These dependencies now build into the verified iPhoneOS arm64 static archive.
-ABI v4 invokes the real `install_pup()` path in app-owned staging, inventories
+ABI v5 invokes the real `install_pup()` path in app-owned staging, inventories
 the extracted result, and promotes a valid immutable firmware generation.
 
 ## Integration seam added by vita3kios
 
-`App/Core/src/runtime.h` remains the private boundary behind stable ABI v4.
+`App/Core/src/runtime.h` remains the private boundary behind stable ABI v5.
 Physical-device builds compile `runtime_vita3k.cpp`; host and Simulator builds
 retain `runtime_stub.cpp` so parser and UI tests never claim guest execution.
 
@@ -59,7 +59,8 @@ The physical-device Direct Game implementation:
 
 The remaining ordered slices are:
 
-1. Install a user-supplied official PUP on device and repeat Direct Game boot.
+1. Repeat the JIT-enabled Minecraft boot with optional Direct Game firmware
+   support files; do not require System Software shell readiness.
 2. Require a visible first guest frame and nonzero frame metrics before calling
    Direct Game playable.
 3. Add a typed SystemShell resolver and direct system-content mount separately.
