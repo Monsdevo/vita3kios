@@ -1,5 +1,5 @@
 vita3kios — MASTER ROADMAP
-Version: 0.8
+Version: 0.10
 Created: 2026-08-22
 Status: M0 COMPLETE — DIRECT GAME MODE IS THE PRIMARY ACTIVE DELIVERY PATH
 
@@ -50,13 +50,15 @@ CURRENT STATUS
   [~] A minimal Apple-native SwiftUI product, versioned C ABI, and pinned Vita3K
       allocator self-test pass host and Simulator smoke tests. Its signed arm64
       bundle installs on the recorded device.
-  [ ] M1, M2, and M3 remain open until signed physical-device runtime reports pass.
-  [x] ABI v3 validates official PUP containers and inventories app-owned extracted
+  [~] M1 and M2 remain open until their repeated physical-device probe gates pass.
+  [x] M3 is complete: the full Vita3KCore arm64 binary links, launches, and returns
+      version/capability data in the signed physical-device app.
+  [x] ABI v4 validates and installs official PUP containers and inventories app-owned extracted
       VitaFS and game generations using only synthetic/open fixtures in automated
       tests. Direct Game reaches a verified eboot SELF container.
   [~] System Software boot reaches the authentic SceShell SELF-container
-      checkpoint. The measured blocker is the unlinked full Vita3K runtime; no
-      guest instruction or guest-rendered firmware frame is claimed yet.
+      checkpoint. Its separate shell/process/service execution path is not
+      implemented; no guest firmware frame is claimed yet.
   [~] Direct Game Mode is the primary implementation path until a user-supplied
       game boots visibly and repeatably on a physical iPhone. Authentic System
       Software remains a later research path and must not block Direct Game.
@@ -217,7 +219,7 @@ Dependency strategy:
         data loss.
   MSYS  Authentic firmware-provided SceShell/LiveArea boots interactively,
         launches an installed title, and safely returns to the shell.
-  MHUD  Accurate low-overhead top-right Compact HUD works in both boot modes.
+  MHUD  Accurate low-overhead top-left Compact HUD works in both boot modes.
   M7    Alpha installation, selected compatibility, and diagnostics gates pass.
   M8    Beta/release performance, stability, licensing, packaging, and docs pass.
 
@@ -291,7 +293,7 @@ PHASE 2B — CORE/GUI SEPARATION AND C ABI
 Goal: Produce a testable Vita3KCore without Qt or desktop main().
 
   [x] 2B.1 Audit main.cpp, interface.cpp, Android/JNI, and CMake target boundaries.
-  [ ] 2B.2 Separate required core modules from Qt/Discord/desktop/debug-only code.
+  [x] 2B.2 Separate required core modules from Qt/Discord/desktop/debug-only code.
   [~] 2B.3 Add create/destroy/initialize/shutdown lifecycle. Opaque lifecycle,
            serialized firmware state, sandbox root initialization, and shutdown
            exist; full EmuEnv initialization and shutdown remain pending.
@@ -302,17 +304,15 @@ Goal: Produce a testable Vita3KCore without Qt or desktop main().
            Bootstrap ownership, string lifetime, thread safety, and exception
            containment are defined; callback threading remains pending.
   [~] 2B.6 Expose UI-free firmware/package install, title enumeration, boot, and stop.
-           PUP preflight, extracted-firmware inventory, and System Software boot
-           preflight exist; PUP extraction, title enumeration, runtime boot, and
-           stop remain pending.
+           PUP installation, firmware/game inventory, Direct Game runtime boot,
+           and stop exist; package install and general title enumeration remain.
   [~] 2B.7 Serialize core operations and safely forward progress/log callbacks.
            ABI operations are serialized per handle; callbacks remain pending.
   [~] 2B.8 Build a macOS host harness with negative state-machine tests. Bootstrap,
            lifecycle, PUP range, firmware inventory, generation mismatch, and
            typed raw-boot blocker tests pass; full EmuEnv paths remain pending.
   [ ] 2B.9 Prototype a CMake-exported static framework/XCFramework.
-  [~] 2B.10 Prove the core target links without Qt or desktop main(). The minimal
-           allocator-backed bootstrap target passes; the full core split remains.
+  [x] 2B.10 Prove the full core target links without Qt or desktop main().
 
 Exit gate:
   [ ] Host harness passes init -> enumerate -> shutdown and error paths.
@@ -332,8 +332,8 @@ Goal: Measure authentic firmware-shell gaps before UI completion.
           Deterministic inventory and readiness logic pass synthetic tests; local
           user-firmware device evidence remains pending.
   [~] 2C.4 Build a headless raw-load shell experiment with typed checkpoints.
-          The experiment reproducibly verifies the authentic SceShell container
-          and reports UPSTREAM_CORE_NOT_LINKED; guest module load is next.
+          The experiment reproducibly verifies the authentic SceShell container;
+          a dedicated shell/process/service runtime composition is next.
   [ ] 2C.5 Emit machine-readable missing NID/sysmodule/IPC/system-event traces.
   [ ] 2C.6 Split SceShellSvc, SceAppMgr, registry, IPMI/shared framebuffer, and
           process-model gaps into owned subphases.
@@ -355,29 +355,34 @@ Goal: Produce a real iOS arm64 core binary and classify every blocker.
   [ ] 3.5 Define Application Support, Caches, Logs, Imports/Staging, and Backups.
   [ ] 3.6 Persist relative identities, never absolute container paths.
   [x] 3.7 Scaffold an empty SwiftUI shell with bridge version/capability display.
-  [~] 3.8 Run Simulator UI/bridge smoke and physical-device arm64 link/load smoke.
-          Simulator launch/report passes; physical device launch was blocked by
-          the locked device after successful installation.
+  [x] 3.8 Run Simulator UI/bridge smoke and physical-device arm64 link/load smoke.
+          Simulator and signed physical-device core loading both pass.
   [x] 3.9 Produce controlled signed/unsigned device and Simulator artifacts.
   [~] 3.10 Classify warnings and keep new port code warning-free. Port code is
            warning-free; known pinned allocator conversion warnings are isolated.
 
 Exit gate:
-  [ ] Physical-device app loads Vita3KCore and returns version/capabilities.
+  [x] Physical-device app loads Vita3KCore and returns version/capabilities.
   [ ] Every incompatible dependency has an owner and resolution.
-  [ ] M3 complete.
+  [x] M3 complete.
 
 PHASE 4 — JIT, EXECUTABLE MEMORY, AND CPU VALIDATION
 
   [ ] 4.1 Record test device, OS, Developer Mode, and signing route.
   [ ] 4.2 Read get-task-allow and related entitlements from the signed binary.
-  [ ] 4.3 Document and test external StikDebug as the initial JIT route.
-  [ ] 4.4 Add a user-facing pre-boot JIT capability probe and typed errors.
-  [ ] 4.5 Adapt Dynarmic executable allocation to Apple W^X rules.
+  [x] 4.3 Document and test external StikDebug as the initial JIT route.
+  [x] 4.4 Add a user-facing pre-boot JIT capability probe and typed errors.
+          The Library reports live process status, launches StikDebug through its
+          external URL, and blocks guest execution before iOS can reject a JIT page.
+  [~] 4.5 Adapt Dynarmic executable allocation to Apple W^X rules. iOS now uses
+          permanent separate writable/executable aliases for each Dynarmic code
+          cache, removing the observed multi-thread whole-cache permission race.
+          Lifecycle and second-boot validation remain open.
   [ ] 4.6 Run fixed ARMv7 arithmetic, flags, branch, memory, invalidation, and
           instruction-cache tests.
   [ ] 4.7 Validate pause/resume, background/foreground, and second-boot caches.
-  [ ] 4.8 Fail through safe stop and diagnostics instead of crashing.
+  [~] 4.8 Fail through safe stop and diagnostics instead of crashing. Missing JIT
+          now returns a typed Direct Game blocker instead of an Invalid Page crash.
   [?] 4.9 Consider integrated StikJIT/app-extension only after external flow and M6.
   [?] 4.10 Measure an interpreter-only flavor; label it experimental if unusable.
 
@@ -388,10 +393,11 @@ Exit gate:
 
 PHASE 5 — GRAPHICS: CAMetalLayer AND MOLTENVK
 
-  [~] 5.1 Add a UIKit/MetalKit CAMetalLayer owner inside SwiftUI. The native owner
-          and ABI attachment exist; the Vita3K renderer connection remains pending.
-  [ ] 5.2 Create an iOS DisplayHandle and VK_EXT_metal_surface.
-  [ ] 5.3 Audit MoltenVK device arm64 linkage, licenses, and signing.
+  [x] 5.1 Add a UIKit/MetalKit CAMetalLayer owner inside SwiftUI and connect it to
+          Vita3K's FrameHost boundary.
+  [x] 5.2 Create an iOS DisplayHandle and VK_EXT_metal_surface through MoltenVK.
+  [~] 5.3 Audit MoltenVK device arm64 linkage, licenses, and signing. Static arm64
+          linkage and signed A17 Pro initialization pass; license inventory remains.
   [ ] 5.4 Present clear/triangle frames; test resize, rotation, scale, and lifecycle.
   [ ] 5.5 Preserve portability enumeration, image swizzle, and fragment correctness.
   [ ] 5.6 Recover from surface loss, background, lock, and scene reconnection.
@@ -416,8 +422,8 @@ PHASE 6 — VFS, FIRMWARE, AND SAFE IMPORT
           Extracted game folders are the first supported game input; archives,
           packages, updates, and DLC remain pending.
   [~] 6.4 Copy imports to staging; do not retain provider URLs as permanent storage.
-          Extracted VitaFS and game folders use app-owned staging and generation
-          promotion; PUP/package extraction transactions remain pending.
+          PUP, extracted VitaFS, and game folders use app-owned staging and
+          generation promotion; package transactions remain pending.
   [~] 6.5 Preflight signature/type, size, free space, param.sfo, title ID, and conflicts.
           Extracted games have bounded SFO/title/SELF validation and size inventory;
           signature, free-space, and conflict policy remain pending.
@@ -475,7 +481,7 @@ Exit gate:
 
 PHASE 7A — PERFORMANCE HUD AND LIVE DIAGNOSTICS
 
-  [~] 7A.1 Add a lock-free or low-contention metric snapshot API. ABI v3 exposes a
+  [~] 7A.1 Add a lock-free or low-contention metric snapshot API. ABI v4 exposes a
            validity-tagged snapshot; live runtime counters remain pending.
   [~] 7A.2 Compact default: guest FPS and real frame interval. The compact surface
            exists and shows unavailable values honestly until the runtime publishes.
@@ -490,8 +496,8 @@ PHASE 7A — PERFORMANCE HUD AND LIVE DIAGNOSTICS
   [ ] 7A.8 Offer screenshot/recording inclusion only where technically controllable.
   [ ] 7A.9 Measure Off/Compact overhead; target <=1% CPU and no meaningful p95 loss.
   [~] 7A.10 Use validity bits; never invent unsupported CPU/GPU/speed values. The
-            contract and unavailable-state rendering exist; the first live sample
-            depends on the full runtime.
+            full runtime publishes frame-derived samples; the first nonzero device
+            sample remains coupled to first-frame presentation.
 
 Exit gate:
   [ ] Top-left Compact HUD is readable and accurate in both boot modes.
@@ -500,9 +506,18 @@ Exit gate:
 
 PHASE 8 — BOOT, SESSION LIFECYCLE, AND FIRST HOMEBREW
 
+  [x] 8.0 Cross-compile the pinned upstream dependency graph for iPhoneOS.
+          The root-owned build path pins Vita3K's FFmpeg 7.1.2 vcpkg baseline,
+          builds static arm64-ios FFmpeg/OpenSSL/cURL/Boost, and reuses the
+          verified MoltenVK iOS package. Full dependency compilation is active.
+
   [ ] 8.1 Select small redistributable homebrew or document hash/acquisition only.
-  [~] 8.2 Reach loader/kernel checkpoint through the smallest no-firmware path.
-          Direct Game reaches an authenticated eboot container; the loader is next.
+  [x] 8.2 CANCELLED: Reach the loader/kernel checkpoint through a no-firmware path.
+          The experiment reached Minecraft's guest main thread but no frame, proving
+          that Direct Game must mount installed Vita system modules.
+  [~] 8.2A Install an official user-supplied PUP through ABI v4, mount its immutable
+           partitions into the runtime VitaFS, and repeat the physical-device game
+           boot. Implementation and signed build pass; user-firmware evidence is next.
   [~] 8.3 Verify CPU, renderer, audio, and UI thread ownership. ABI seams and a
           native CAMetalLayer owner exist; runtime thread ownership remains pending.
   [ ] 8.4 Present the first frame and measure shader compilation.
@@ -547,7 +562,7 @@ PHASE 9 — INPUT, TOUCH, MOTION, AUDIO, AND VITA FEATURES
   [ ] 9.1 GameController discovery and hot-plug for common controllers.
   [ ] 9.2 Vita mapping, deadzones, ranges, and user remapping.
   [~] 9.3 Native touch overlay for analogs, d-pad, face, shoulder, Start/Select/PS.
-          All listed controls submit normalized ABI v3 snapshots; runtime mapping,
+          All listed controls submit normalized ABI v4 snapshots; runtime mapping,
           multitouch stress testing, and customization remain pending. L/R use
           compact shoulder capsules directly above their controller clusters.
   [ ] 9.4 Overlay scale, opacity, position, and handed landscape layouts.
@@ -841,3 +856,29 @@ remain informed by probe evidence.
   - Added an in-app native import-requirements card that separates the currently
     accepted extracted-folder layout from formats and execution paths that are
     not implemented yet.
+
+2026-08-23 — v0.9
+  - Added a reproducible arm64 iPhoneOS dependency toolchain and a root-owned patch
+    that builds the pinned Vita3K loader, HLE services, Dynarmic CPU, audio, input,
+    Vulkan renderer, MoltenVK dispatcher, codecs, and app-session controller as a
+    static core without linking the upstream desktop frontend.
+  - Connected the native CAMetalLayer, app-owned VitaFS/game mount, Vita3K session
+    lifecycle, controller state, runtime metrics, and built-in renderer shaders.
+  - Reached Vita3K guest main-thread execution with Minecraft PCSB00560 on a
+    StikDebug-enabled iPhone using the pinned upstream commit. First guest-frame
+    presentation remains open and is not counted as a completed Direct Game gate.
+  - Added live JIT detection, an explicit StikDebug action, and a typed pre-boot
+    blocker so launching without JIT reports recovery guidance instead of crashing.
+
+2026-08-30 — v0.10
+  - Added ABI v4 firmware installation using Vita3K's real PUP decryption and
+    FAT/exFAT extraction implementation on iPhoneOS arm64.
+  - Added app-owned PUP staging, immutable generation promotion, restoration,
+    and zero-copy firmware partition mounts for Direct Game sessions.
+  - Replaced Dynarmic's process-wide iOS code-cache permission toggling with
+    separate permanent writable and executable mappings, eliminating the observed
+    multi-thread W^X execution crash in the extended device run.
+  - Required installed firmware before Direct Game boot and added a typed recovery
+    report instead of allowing a misleading black-screen session.
+  - Built, signed, installed, and launched ABI v4 on Bartu's iPhone. The next gate
+    is a user-supplied official PUP installation followed by first-frame testing.

@@ -6,7 +6,7 @@ the subsequent research path.
 
 ## Implemented gate
 
-The current ABI v3 and native app can:
+The current ABI v4 and native app can:
 
 - import a user-selected extracted game directory through the Files picker;
 - accept either a direct game root or one container with exactly one game root;
@@ -20,13 +20,19 @@ The current ABI v3 and native app can:
 - show title metadata and `ICON0.PNG` in the Apple-native library;
 - submit a typed Direct Game boot request with deterministic generation identity;
 - open a 960x544 aspect-fit gameplay surface backed by `CAMetalLayer`;
-- attach that native layer and its drawable dimensions through ABI v3 before
+- attach that native layer and its drawable dimensions through the C ABI before
   issuing the Direct Game boot request;
 - provide native dual analog sticks, D-pad, face buttons, L/R, Start, Select,
   and PS/Home;
 - submit one normalized controller snapshot through the C ABI;
 - show a compact top-left performance HUD that renders only validity-tagged
   metrics and never invents FPS or frame-time values;
+- install and inventory a user-selected official firmware PUP through Vita3K's
+  PUP decryption and FAT/exFAT extraction implementation;
+- mount the installed `os0`, `pd0`, `sa0`, and `vs0` partitions into the
+  app-owned runtime VitaFS without duplicating firmware data;
+- initialize the pinned Vita3K loader, HLE services, Dynarmic CPU, audio stack,
+  Vulkan renderer, and MoltenVK dispatcher without the desktop Qt frontend;
 - write a redacted `direct-game-boot-report.json` in the app Documents directory.
 
 Synthetic automated tests verify the SFO parser, game inventory, generation
@@ -53,34 +59,34 @@ For the first eventual runtime test, a small redistributable Vita homebrew is th
 lowest-risk target. Retail dumps may additionally require Vita3K's license and
 content-decryption installation path, which is not part of this folder preflight.
 
-## Exact blocker
+## Exact current gate
 
-The last successful checkpoint is `Game eboot SELF container verified`. The
-next blocker is `Full Vita3K runtime is not linked into the iOS core target`.
+With JIT enabled, Minecraft PCSB00560 reaches `Game main thread started` on an
+iPhone 15 Pro. Vita3K creates the Apple GPU Vulkan device, links the game SELF,
+starts the guest main thread, and runs the MoltenVK render thread. The original
+iOS whole-cache W^X race was removed with separate writable and executable
+aliases for Dynarmic's code cache.
 
-The native display attachment, controller, HUD, import transaction, and boot
-contract are ready for the runtime, but the current iOS product still uses
-`runtime_stub.cpp`.
-It does not execute guest instructions or present a guest-rendered game frame.
-
-The next implementation slice must create a Qt/JNI-free Vita3K runtime
-composition, initialize `EmuEnvState`, mount the imported generation as `app0`,
-load the eboot through the real module loader, start its guest main thread, and
-connect Dynarmic and MoltenVK to the existing iOS adapters.
+The remaining acceptance gate is `First guest game frame presented`. Firmware
+was not installed during the last game run, so ABI v4 now requires an installed
+official firmware generation before Direct Game begins. The next device test
+must install the user's official PUP, repeat the boot, and distinguish missing
+system-module dependencies from any later title-specific compatibility issue.
 
 ## Device test for this gate
 
 1. Build, sign, and sideload the current app.
-2. Enable JIT through the verified local sideload workflow.
-3. Tap **Import** in **Games** and select an extracted game directory.
-4. Confirm that the native library shows its title, title ID, version, size, and
+2. Select **Install Official PUP** and allow Vita3K to install and inventory the
+   user-provided firmware.
+3. Enable JIT through the verified local sideload workflow.
+4. Tap **Import** in **Games** and select an extracted game directory.
+5. Confirm that the native library shows its title, title ID, version, size, and
    icon when available.
-5. Tap **Play**.
-6. Confirm that the gameplay surface, touch controller, and top-left HUD appear.
-7. Confirm that the checkpoint is `Game eboot SELF container verified` and the
-   blocker identifies the unlinked full runtime.
-8. Export `direct-game-boot-report.json` from the app Documents directory.
+6. Tap **Play**.
+7. Confirm that the gameplay surface, compact controller, and top-left HUD appear.
+8. Confirm that the checkpoint advances from `Game main thread started` to
+   `First guest game frame presented` and that FPS becomes valid.
+9. Export `direct-game-boot-report.json` from the app Documents directory.
 
-This test proves the import, metadata, session UI, input, metrics, and boot-target
-boundary. It does not prove game execution; that requires the next full-runtime
-link and a real guest frame on the physical device.
+Only a visible guest frame and nonzero guest FPS close this gate. A successful
+loader return or a running render thread alone is not counted as playability.

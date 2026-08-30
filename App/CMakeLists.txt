@@ -8,6 +8,18 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 get_filename_component(VITA3KIOS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 set(VITA3KIOS_UPSTREAM_ROOT "${VITA3KIOS_ROOT}/External/Vita3K")
+option(VITA3KIOS_FULL_CORE "Link the complete Vita3K Direct Game runtime" OFF)
+
+set(VITA3KIOS_RUNTIME_SOURCE Core/src/runtime_stub.cpp)
+if(VITA3KIOS_FULL_CORE)
+    set(VITA3KIOS_FULL_CORE_ARCHIVE "${VITA3KIOS_ROOT}/Build/Core/libVita3KFullCore.a")
+    set(VITA3KIOS_DEPENDENCY_PREFIX
+        "${VITA3KIOS_ROOT}/Build/Dependencies/vcpkg/installed/arm64-ios-vita3k")
+    if(NOT EXISTS "${VITA3KIOS_FULL_CORE_ARCHIVE}")
+        message(FATAL_ERROR "Full Vita3K iOS core is missing; run Scripts/build-vita3k-ios-core.sh")
+    endif()
+    set(VITA3KIOS_RUNTIME_SOURCE Core/src/runtime_vita3k.cpp)
+endif()
 
 execute_process(
     COMMAND git -C "${VITA3KIOS_ROOT}" rev-parse HEAD
@@ -22,6 +34,14 @@ execute_process(
     COMMAND_ERROR_IS_FATAL ANY
 )
 
+set(VITA3KIOS_SOURCE_ROOT "${VITA3KIOS_UPSTREAM_ROOT}")
+if(VITA3KIOS_FULL_CORE)
+    set(VITA3KIOS_MATERIALIZED_SOURCE "/tmp/vita3kios-vita3k-source-${VITA3KIOS_UPSTREAM_COMMIT}")
+    if(EXISTS "${VITA3KIOS_MATERIALIZED_SOURCE}/vita3k/interface.cpp")
+        set(VITA3KIOS_SOURCE_ROOT "${VITA3KIOS_MATERIALIZED_SOURCE}")
+    endif()
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     if(CMAKE_OSX_SYSROOT MATCHES "iphonesimulator")
         set(VITA3KIOS_BUILD_PLATFORM "iphonesimulator-arm64")
@@ -34,8 +54,8 @@ endif()
 
 add_library(Vita3KCore STATIC
     Core/src/core.cpp
-    Core/src/runtime_stub.cpp
-    "${VITA3KIOS_UPSTREAM_ROOT}/vita3k/mem/src/allocator.cpp"
+    ${VITA3KIOS_RUNTIME_SOURCE}
+    "${VITA3KIOS_SOURCE_ROOT}/vita3k/mem/src/allocator.cpp"
 )
 set_target_properties(Vita3KCore PROPERTIES
     CXX_STANDARD 20
@@ -45,8 +65,24 @@ set_target_properties(Vita3KCore PROPERTIES
 )
 target_include_directories(Vita3KCore
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Core/include"
-    PRIVATE "${VITA3KIOS_UPSTREAM_ROOT}/vita3k/mem/include"
+    PRIVATE "${VITA3KIOS_SOURCE_ROOT}/vita3k/mem/include"
 )
+if(VITA3KIOS_FULL_CORE)
+    file(GLOB VITA3KIOS_UPSTREAM_COMPONENT_INCLUDES
+        "${VITA3KIOS_SOURCE_ROOT}/vita3k/*/include")
+    target_include_directories(Vita3KCore PRIVATE
+        "${VITA3KIOS_SOURCE_ROOT}/vita3k"
+        ${VITA3KIOS_UPSTREAM_COMPONENT_INCLUDES}
+        "${VITA3KIOS_SOURCE_ROOT}/external/sdl/include"
+        "${VITA3KIOS_SOURCE_ROOT}/external/fmt/include"
+        "${VITA3KIOS_SOURCE_ROOT}/external/spdlog/include"
+        "${VITA3KIOS_DEPENDENCY_PREFIX}/include"
+    )
+    target_link_libraries(Vita3KCore PUBLIC "${VITA3KIOS_FULL_CORE_ARCHIVE}")
+    target_compile_definitions(Vita3KCore PRIVATE VITA3KIOS_FULL_CORE=1)
+    set_source_files_properties(Core/src/runtime_vita3k.cpp
+        PROPERTIES COMPILE_OPTIONS "-Wno-error")
+endif()
 target_compile_definitions(Vita3KCore PRIVATE
     VITA3KIOS_APP_COMMIT="${VITA3KIOS_APP_COMMIT}"
     VITA3KIOS_UPSTREAM_COMMIT="${VITA3KIOS_UPSTREAM_COMMIT}"
@@ -54,7 +90,7 @@ target_compile_definitions(Vita3KCore PRIVATE
 )
 target_compile_options(Vita3KCore PRIVATE -Wall -Wextra -Wpedantic -Werror)
 set_source_files_properties(
-    "${VITA3KIOS_UPSTREAM_ROOT}/vita3k/mem/src/allocator.cpp"
+    "${VITA3KIOS_SOURCE_ROOT}/vita3k/mem/src/allocator.cpp"
     PROPERTIES COMPILE_OPTIONS "-Wno-error=sign-compare;-Wno-error=shorten-64-to-32"
 )
 
@@ -77,6 +113,35 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         Sources/SettingsView.swift
     )
     target_link_libraries(vita3kios PRIVATE Vita3KCore "-lc++")
+    if(VITA3KIOS_FULL_CORE)
+        target_link_libraries(vita3kios PRIVATE
+            "-ObjC"
+            "-framework Accelerate"
+            "-framework AudioToolbox"
+            "-framework AVFoundation"
+            "-framework CoreAudio"
+            "-framework CoreBluetooth"
+            "-framework CoreFoundation"
+            "-framework CoreGraphics"
+            "-framework CoreHaptics"
+            "-framework CoreMedia"
+            "-framework CoreMotion"
+            "-framework CoreVideo"
+            "-framework Foundation"
+            "-framework GameController"
+            "-framework IOSurface"
+            "-framework Metal"
+            "-framework QuartzCore"
+            "-framework Security"
+            "-framework UIKit"
+            "-framework VideoToolbox"
+            "-liconv" "-lsqlite3" "-lz")
+        add_custom_command(TARGET vita3kios POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                "${VITA3KIOS_SOURCE_ROOT}/vita3k/shaders-builtin"
+                "$<TARGET_FILE_DIR:vita3kios>/shaders-builtin"
+            COMMENT "Bundling Vita3K built-in renderer shaders")
+    endif()
     target_include_directories(vita3kios PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Core/include")
     set_target_properties(vita3kios PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Resources/Info.plist.in"

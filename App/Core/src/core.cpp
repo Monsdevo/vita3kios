@@ -23,6 +23,15 @@
 #include <unordered_set>
 #include <vector>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IOS && !TARGET_OS_SIMULATOR
+#include <sys/proc.h>
+#include <sys/sysctl.h>
+#include <unistd.h>
+#endif
+#endif
+
 #ifndef VITA3KIOS_APP_COMMIT
 #define VITA3KIOS_APP_COMMIT "unknown"
 #endif
@@ -51,6 +60,21 @@ constexpr std::uint32_t SupportedInputMask =
     V3KIOS_INPUT_L | V3KIOS_INPUT_R |
     V3KIOS_INPUT_TRIANGLE | V3KIOS_INPUT_CIRCLE |
     V3KIOS_INPUT_CROSS | V3KIOS_INPUT_SQUARE | V3KIOS_INPUT_PS;
+
+bool IsJITEnabled() {
+#if defined(__APPLE__) && TARGET_OS_IOS && !TARGET_OS_SIMULATOR
+    int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid() };
+    kinfo_proc processInfo{};
+    std::size_t processInfoSize = sizeof(processInfo);
+    if (sysctl(mib, 4, &processInfo, &processInfoSize, nullptr, 0) != 0 ||
+        processInfoSize < sizeof(processInfo)) {
+        return false;
+    }
+    return (processInfo.kp_proc.p_flag & P_TRACED) != 0;
+#else
+    return true;
+#endif
+}
 
 struct InventoryData {
     v3kios_firmware_state_v1 state = V3KIOS_FIRMWARE_ABSENT;
@@ -507,7 +531,7 @@ extern "C" v3kios_result_v1 v3kios_core_get_info(const v3kios_core_handle_t hand
                              V3KIOS_CAPABILITY_DISPLAY_SURFACE;
     if (v3kios::runtime::IsFullCoreLinked())
         out_info->capabilities |= V3KIOS_CAPABILITY_DIRECT_GAME |
-                                  V3KIOS_CAPABILITY_SYSTEM_SOFTWARE;
+                                  V3KIOS_CAPABILITY_FIRMWARE_PUP_INSTALL;
     out_info->vita3kios_commit = VITA3KIOS_APP_COMMIT;
     out_info->upstream_commit = VITA3KIOS_UPSTREAM_COMMIT;
     out_info->upstream_version = "0.2.1";
@@ -606,6 +630,35 @@ extern "C" v3kios_result_v1 v3kios_core_inspect_firmware_pup(
         out_info->file_size = fileSize;
         out_info->version_text = context->pupVersionText.c_str();
         return V3KIOS_RESULT_OK;
+    } catch (...) {
+        return V3KIOS_RESULT_INTERNAL_ERROR;
+    }
+}
+
+extern "C" v3kios_result_v1 v3kios_core_install_firmware_pup(
+    const v3kios_core_handle_t handle, const char* pup_path, const char* vita_fs_root) {
+    if (pup_path == nullptr || pup_path[0] == '\0' || vita_fs_root == nullptr ||
+        vita_fs_root[0] == '\0') return V3KIOS_RESULT_INVALID_ARGUMENT;
+    auto* context = Resolve(handle);
+    if (context == nullptr) return V3KIOS_RESULT_INVALID_HANDLE;
+    try {
+        const filesystem::path pupPath{pup_path};
+        const filesystem::path vitaFsRoot{vita_fs_root};
+        {
+            const std::lock_guard<std::mutex> lock{context->mutex};
+            if (context->lifecycle == V3KIOS_LIFECYCLE_CREATED ||
+                context->lifecycle == V3KIOS_LIFECYCLE_BOOTING ||
+                context->lifecycle == V3KIOS_LIFECYCLE_RUNNING)
+                return V3KIOS_RESULT_INVALID_STATE;
+            if (!IsPathInside(vitaFsRoot, context->dataRoot))
+                return V3KIOS_RESULT_INVALID_FIRMWARE;
+            std::error_code error;
+            if (!filesystem::is_regular_file(pupPath, error) || error)
+                return V3KIOS_RESULT_IO_ERROR;
+        }
+        if (!v3kios::runtime::IsFullCoreLinked()) return V3KIOS_RESULT_UNSUPPORTED;
+        return v3kios::runtime::InstallFirmwarePup(pupPath, vitaFsRoot)
+            ? V3KIOS_RESULT_OK : V3KIOS_RESULT_INVALID_FIRMWARE;
     } catch (...) {
         return V3KIOS_RESULT_INTERNAL_ERROR;
     }
@@ -819,6 +872,16 @@ extern "C" v3kios_result_v1 v3kios_core_boot_direct_game(
         out_report->blocker = V3KIOS_DIRECT_BOOT_BLOCKER_NONE;
         out_report->generation_id = "";
         out_report->title_id = "";
+        if (context->lifecycle == V3KIOS_LIFECYCLE_RUNNING &&
+            context->activeGame.generationId == generation_id) {
+            out_report->checkpoint = V3KIOS_DIRECT_BOOT_CHECKPOINT_MAIN_THREAD_STARTED;
+            out_report->generation_id = context->activeGame.generationId.c_str();
+            out_report->title_id = context->activeGame.titleId.c_str();
+            context->directBootDetail =
+                "The selected Vita3K guest session is already running.";
+            out_report->detail = context->directBootDetail.c_str();
+            return V3KIOS_RESULT_OK;
+        }
         if (context->lifecycle == V3KIOS_LIFECYCLE_CREATED ||
             context->lifecycle == V3KIOS_LIFECYCLE_BOOTING ||
             context->lifecycle == V3KIOS_LIFECYCLE_RUNNING) {
@@ -866,6 +929,21 @@ extern "C" v3kios_result_v1 v3kios_core_boot_direct_game(
             return V3KIOS_RESULT_INVALID_GAME;
         }
         out_report->checkpoint = V3KIOS_DIRECT_BOOT_CHECKPOINT_EBOOT_CONTAINER_VERIFIED;
+        if (context->inventory.state != V3KIOS_FIRMWARE_SHELL_READY ||
+            context->inventory.root.empty()) {
+            context->directBootDetail =
+                "Install an official PlayStation Vita firmware PUP before starting a game.";
+            out_report->blocker = V3KIOS_DIRECT_BOOT_BLOCKER_FIRMWARE_NOT_READY;
+            out_report->detail = context->directBootDetail.c_str();
+            return V3KIOS_RESULT_FIRMWARE_NOT_READY;
+        }
+        if (!IsJITEnabled()) {
+            context->directBootDetail =
+                "JIT is not enabled for this process. Enable JIT with StikDebug, then reopen the game.";
+            out_report->blocker = V3KIOS_DIRECT_BOOT_BLOCKER_JIT_NOT_ENABLED;
+            out_report->detail = context->directBootDetail.c_str();
+            return V3KIOS_RESULT_GAME_NOT_READY;
+        }
         if (context->displaySurface.metal_layer == nullptr ||
             context->displaySurface.drawable_width == 0 ||
             context->displaySurface.drawable_height == 0) {
@@ -879,7 +957,7 @@ extern "C" v3kios_result_v1 v3kios_core_boot_direct_game(
         context->lifecycle = V3KIOS_LIFECYCLE_BOOTING;
         const auto runtimeResult = v3kios::runtime::BootDirectGame(
             context->activeGame.root, context->activeGame.ebootRelativePath,
-            context->activeGame.titleId);
+            context->activeGame.titleId, context->dataRoot, context->inventory.root);
         out_report->checkpoint = runtimeResult.checkpoint;
         out_report->blocker = runtimeResult.blocker;
         context->directBootDetail = runtimeResult.detail;
@@ -889,9 +967,29 @@ extern "C" v3kios_result_v1 v3kios_core_boot_direct_game(
             : (context->inventory.state == V3KIOS_FIRMWARE_SHELL_READY
                 ? V3KIOS_LIFECYCLE_FIRMWARE_READY : V3KIOS_LIFECYCLE_INITIALIZED);
         return runtimeResult.result;
+    } catch (const std::exception& exception) {
+        const std::lock_guard<std::mutex> lock{context->mutex};
+        context->lifecycle = context->inventory.state == V3KIOS_FIRMWARE_SHELL_READY
+            ? V3KIOS_LIFECYCLE_FIRMWARE_READY : V3KIOS_LIFECYCLE_INITIALIZED;
+        context->directBootDetail =
+            std::string{"Vita3K raised an exception during Direct Game boot: "} + exception.what();
+        out_report->blocker = V3KIOS_DIRECT_BOOT_BLOCKER_CORE_INITIALIZATION_FAILED;
+        out_report->detail = context->directBootDetail.c_str();
+        return V3KIOS_RESULT_INTERNAL_ERROR;
     } catch (...) {
+        const std::lock_guard<std::mutex> lock{context->mutex};
+        context->lifecycle = context->inventory.state == V3KIOS_FIRMWARE_SHELL_READY
+            ? V3KIOS_LIFECYCLE_FIRMWARE_READY : V3KIOS_LIFECYCLE_INITIALIZED;
+        context->directBootDetail =
+            "Vita3K raised a non-standard exception during Direct Game boot.";
+        out_report->blocker = V3KIOS_DIRECT_BOOT_BLOCKER_CORE_INITIALIZATION_FAILED;
+        out_report->detail = context->directBootDetail.c_str();
         return V3KIOS_RESULT_INTERNAL_ERROR;
     }
+}
+
+extern "C" int v3kios_core_is_jit_enabled(void) {
+    return IsJITEnabled() ? 1 : 0;
 }
 
 extern "C" v3kios_result_v1 v3kios_core_set_input_state(
@@ -979,7 +1077,7 @@ extern "C" const char* v3kios_result_description(const v3kios_result_v1 result) 
     case V3KIOS_RESULT_UNSUPPORTED: return "Capability is not implemented";
     case V3KIOS_RESULT_IO_ERROR: return "Filesystem operation failed";
     case V3KIOS_RESULT_INVALID_FIRMWARE: return "Firmware validation failed";
-    case V3KIOS_RESULT_FIRMWARE_NOT_READY: return "Firmware is not ready for System Software boot";
+    case V3KIOS_RESULT_FIRMWARE_NOT_READY: return "PlayStation Vita firmware is not ready";
     case V3KIOS_RESULT_INVALID_GAME: return "Game validation failed";
     case V3KIOS_RESULT_GAME_NOT_READY: return "Game is not ready for Direct Game boot";
     }
@@ -1049,6 +1147,8 @@ extern "C" const char* v3kios_direct_boot_blocker_description(
     case V3KIOS_DIRECT_BOOT_BLOCKER_MAIN_THREAD_FAILED: return "Game main thread failed to start";
     case V3KIOS_DIRECT_BOOT_BLOCKER_RENDERER_FAILED: return "Game renderer initialization failed";
     case V3KIOS_DIRECT_BOOT_BLOCKER_DISPLAY_SURFACE_MISSING: return "Native game display surface is not attached";
+    case V3KIOS_DIRECT_BOOT_BLOCKER_JIT_NOT_ENABLED: return "JIT is not enabled for this process";
+    case V3KIOS_DIRECT_BOOT_BLOCKER_FIRMWARE_NOT_READY: return "PlayStation Vita firmware is not installed";
     }
     return "Unknown Direct Game blocker";
 }

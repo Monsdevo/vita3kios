@@ -17,6 +17,8 @@ private final class CoreHandleStorage {
 @MainActor
 final class CoreStatusModel {
     @ObservationIgnored private let core = CoreHandleStorage()
+    @ObservationIgnored private var directBootRequestGeneration: String?
+    @ObservationIgnored private var firstGuestFrameReported = false
 
     private(set) var abiVersion: UInt32 = 0
     private(set) var capabilities: UInt64 = 0
@@ -26,6 +28,7 @@ final class CoreStatusModel {
     private(set) var platform = "Unavailable"
     private(set) var allocatorTestPassed = false
     private(set) var reportWritten = false
+    private(set) var jitEnabled = false
     private(set) var firmwareBusy = false
     private(set) var firmwareReady = false
     private(set) var firmwareVersion = "Not installed"
@@ -34,7 +37,7 @@ final class CoreStatusModel {
     private(set) var firmwareFileCount: UInt32 = 0
     private(set) var firmwareBytes: UInt64 = 0
     private(set) var shellPath = ""
-    private(set) var firmwareDetail = "Import an official firmware PUP for validation or an extracted VitaFS for the current boot experiment."
+    private(set) var firmwareDetail = "Install an official PlayStation Vita firmware PUP before starting a game."
     private(set) var games: [GameLibraryItem] = []
     private(set) var gameImportBusy = false
     private(set) var gameLibraryBusy = false
@@ -77,35 +80,47 @@ final class CoreStatusModel {
         upstreamVersion = string(info.upstream_version)
         platform = string(info.build_platform)
         allocatorTestPassed = v3kios_core_run_bootstrap_self_test(core.value).rawValue == 0
+        refreshJITStatus()
         initializeIfNeeded()
         restoreFirmwareIfPresent()
         restoreGames()
         writeReadinessReport()
     }
 
+    func refreshJITStatus() {
+        jitEnabled = v3kios_core_is_jit_enabled() != 0
+    }
+
     func inspectFirmwarePUP(_ url: URL) {
         guard core.value != 0 else { return }
         firmwareBusy = true
         error = nil
-        let accessed = url.startAccessingSecurityScopedResource()
-        defer {
-            if accessed { url.stopAccessingSecurityScopedResource() }
+        do {
+            let supportRoot = try Self.applicationSupportRoot()
+            let coreHandle = core.value
+            Task {
+                do {
+                    let snapshot = try await Task.detached(priority: .userInitiated) {
+                        try Self.installAndInventoryFirmwarePUP(
+                            source: url,
+                            supportRoot: supportRoot,
+                            handle: coreHandle
+                        )
+                    }.value
+                    apply(snapshot)
+                } catch {
+                    self.error = error.localizedDescription
+                    if !firmwareReady {
+                        firmwareDetail = "The official firmware PUP could not be installed."
+                    }
+                }
+                firmwareBusy = false
+            }
+        } catch {
+            self.error = error.localizedDescription
+            firmwareDetail = "The official firmware PUP could not be installed."
             firmwareBusy = false
         }
-
-        var info = v3kios_pup_info_v1()
-        info.struct_size = UInt32(MemoryLayout<v3kios_pup_info_v1>.size)
-        let result = url.path.withCString {
-            v3kios_core_inspect_firmware_pup(core.value, $0, &info)
-        }
-        guard result.rawValue == 0 else {
-            error = description(for: result)
-            firmwareDetail = "The selected file did not pass the firmware PUP preflight."
-            return
-        }
-
-        firmwareVersion = string(info.version_text)
-        firmwareDetail = "Official PUP container validated: \(info.record_count) records, \(ByteCountFormatter.string(fromByteCount: Int64(info.file_size), countStyle: .file)). The iOS partition extractor is the next core integration gate."
     }
 
     func importExtractedVitaFS(_ url: URL) {
@@ -173,10 +188,35 @@ final class CoreStatusModel {
     }
 
     func bootDirectGame(_ game: GameLibraryItem) {
+        guard directBootRequestGeneration != game.generation,
+              activeGame?.generation != game.generation else { return }
         guard let container = gameContainerURL(for: game) else {
             error = "The imported game container is unavailable."
             return
         }
+        guard firmwareReady else {
+            activeGame = game
+            directBootCheckpoint = "Game eboot SELF container verified"
+            directBootBlocker = "PlayStation Vita firmware is not installed"
+            directBootDetail = "Install an official PlayStation Vita firmware PUP before starting a game."
+            error = "Firmware must be installed before starting a game."
+            writeDirectGameReport(result: V3KIOS_RESULT_FIRMWARE_NOT_READY)
+            return
+        }
+        refreshJITStatus()
+        guard jitEnabled else {
+            activeGame = game
+            directBootCheckpoint = "Game eboot SELF container verified"
+            directBootBlocker = "JIT is not enabled for this process"
+            directBootDetail = "Enable JIT with StikDebug, then reopen the game."
+            error = "JIT must be enabled before starting a game."
+            writeDirectGameReport(result: V3KIOS_RESULT_GAME_NOT_READY)
+            return
+        }
+        directBootRequestGeneration = game.generation
+        firstGuestFrameReported = false
+        activeGame = game
+        defer { directBootRequestGeneration = nil }
         var report = v3kios_direct_boot_report_v1()
         report.struct_size = UInt32(MemoryLayout<v3kios_direct_boot_report_v1>.size)
         let result = container.path.withCString { root in
@@ -187,7 +227,6 @@ final class CoreStatusModel {
         directBootCheckpoint = string(v3kios_direct_boot_checkpoint_description(report.checkpoint))
         directBootBlocker = string(v3kios_direct_boot_blocker_description(report.blocker))
         directBootDetail = string(report.detail)
-        activeGame = game
         if result.rawValue != 0 && result != V3KIOS_RESULT_UNSUPPORTED {
             error = description(for: result)
         } else {
@@ -197,6 +236,8 @@ final class CoreStatusModel {
     }
 
     func endDirectGameSession() {
+        directBootRequestGeneration = nil
+        firstGuestFrameReported = false
         _ = v3kios_core_stop_session(core.value)
         var neutral = v3kios_input_state_v1()
         neutral.struct_size = UInt32(MemoryLayout<v3kios_input_state_v1>.size)
@@ -230,6 +271,17 @@ final class CoreStatusModel {
             hostCPUPercent: snapshot.host_cpu_percent,
             hostMemoryBytes: snapshot.host_memory_bytes
         )
+        if activeGame != nil,
+           snapshot.validity_mask & MetricValidity.guestFPS != 0,
+           snapshot.guest_fps > 0 {
+            directBootCheckpoint = "First guest game frame presented"
+            directBootBlocker = "No blocker"
+            directBootDetail = "The Vita3K guest is presenting frames through the iOS Metal surface."
+            if !firstGuestFrameReported {
+                firstGuestFrameReported = true
+                writeDirectGameReport(result: V3KIOS_RESULT_OK)
+            }
+        }
     }
 
     func attachDisplaySurface(_ layer: CAMetalLayer, drawableSize: CGSize, scale: CGFloat) -> Bool {
@@ -379,7 +431,18 @@ final class CoreStatusModel {
 
     private func gameContainerURL(for game: GameLibraryItem) -> URL? {
         guard let supportRoot = try? Self.applicationSupportRoot() else { return nil }
-        return supportRoot.appendingPathComponent(game.containerRelativePath, isDirectory: true)
+        let generationContainer = supportRoot
+            .appendingPathComponent("Games/Generations", isDirectory: true)
+            .appendingPathComponent(game.generation, isDirectory: true)
+        if FileManager.default.fileExists(atPath: generationContainer.path) {
+            return generationContainer
+        }
+        let recordedContainer = supportRoot.appendingPathComponent(
+            game.containerRelativePath,
+            isDirectory: true
+        )
+        return FileManager.default.fileExists(atPath: recordedContainer.path)
+            ? recordedContainer : nil
     }
 
     private func apply(_ snapshot: FirmwareInventorySnapshot) {
@@ -617,6 +680,55 @@ final class CoreStatusModel {
         }
     }
 
+    nonisolated private static func installAndInventoryFirmwarePUP(
+        source: URL,
+        supportRoot: URL,
+        handle: v3kios_core_handle_t
+    ) throws -> FirmwareInventorySnapshot {
+        let accessed = source.startAccessingSecurityScopedResource()
+        defer { if accessed { source.stopAccessingSecurityScopedResource() } }
+
+        var info = v3kios_pup_info_v1()
+        info.struct_size = UInt32(MemoryLayout<v3kios_pup_info_v1>.size)
+        let preflight = source.path.withCString {
+            v3kios_core_inspect_firmware_pup(handle, $0, &info)
+        }
+        guard preflight.rawValue == 0 else {
+            throw FirmwareImportError.failed(copyString(v3kios_result_description(preflight)))
+        }
+
+        let fileManager = FileManager.default
+        let firmwareRoot = supportRoot.appendingPathComponent("Firmware", isDirectory: true)
+        let generationsRoot = firmwareRoot.appendingPathComponent("Generations", isDirectory: true)
+        try fileManager.createDirectory(at: generationsRoot, withIntermediateDirectories: true)
+        let staging = firmwareRoot.appendingPathComponent("staging-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
+        do {
+            let installResult = source.path.withCString { pupPath in
+                staging.path.withCString { vitaFsPath in
+                    v3kios_core_install_firmware_pup(handle, pupPath, vitaFsPath)
+                }
+            }
+            guard installResult.rawValue == 0 else {
+                throw FirmwareImportError.failed(copyString(v3kios_result_description(installResult)))
+            }
+            let staged = inventory(path: staging.path, handle: handle)
+            guard staged.ready else {
+                throw FirmwareImportError.notReady(staged.detail)
+            }
+            let destination = generationsRoot.appendingPathComponent(staged.generation, isDirectory: true)
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: staging)
+            } else {
+                try fileManager.moveItem(at: staging, to: destination)
+            }
+            return inventory(path: destination.path, handle: handle)
+        } catch {
+            try? fileManager.removeItem(at: staging)
+            throw error
+        }
+    }
+
     nonisolated private static func inventory(
         path: String,
         handle: v3kios_core_handle_t
@@ -701,6 +813,7 @@ enum CoreCapability {
     static let inputState: UInt64 = 1 << 11
     static let metricsSnapshot: UInt64 = 1 << 12
     static let displaySurface: UInt64 = 1 << 13
+    static let firmwarePUPInstall: UInt64 = 1 << 14
 }
 
 struct GameLibraryItem: Identifiable, Hashable, Sendable {
@@ -791,10 +904,13 @@ private struct GameInventorySnapshot: Sendable {
 
 private enum FirmwareImportError: LocalizedError {
     case notReady(String)
+    case failed(String)
 
     var errorDescription: String? {
         switch self {
         case let .notReady(detail):
+            return detail
+        case let .failed(detail):
             return detail
         }
     }

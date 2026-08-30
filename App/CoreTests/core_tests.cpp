@@ -175,6 +175,9 @@ int main() {
     const auto invalidPupPath = MakeOutOfRangePup(fixtureRoot);
     assert(v3kios_core_inspect_firmware_pup(handle, invalidPupPath.c_str(), &pupInfo) ==
            V3KIOS_RESULT_INVALID_FIRMWARE);
+    const auto installRoot = fixtureRoot / "data/Firmware/staging-test";
+    assert(v3kios_core_install_firmware_pup(handle, pupPath.c_str(), installRoot.c_str()) ==
+           V3KIOS_RESULT_UNSUPPORTED);
 
     assert(v3kios_core_inventory_firmware(handle, vitaRoot.c_str(), &inventory) ==
            V3KIOS_RESULT_OK);

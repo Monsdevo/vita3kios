@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define VITA3KIOS_CORE_ABI_VERSION 3U
+#define VITA3KIOS_CORE_ABI_VERSION 4U
 
 typedef uint64_t v3kios_core_handle_t;
 
@@ -40,7 +40,8 @@ typedef enum v3kios_capability_v1 {
     V3KIOS_CAPABILITY_DIRECT_GAME_PREFLIGHT = 1ULL << 10,
     V3KIOS_CAPABILITY_INPUT_STATE = 1ULL << 11,
     V3KIOS_CAPABILITY_METRICS_SNAPSHOT = 1ULL << 12,
-    V3KIOS_CAPABILITY_DISPLAY_SURFACE = 1ULL << 13
+    V3KIOS_CAPABILITY_DISPLAY_SURFACE = 1ULL << 13,
+    V3KIOS_CAPABILITY_FIRMWARE_PUP_INSTALL = 1ULL << 14
 } v3kios_capability_v1;
 
 typedef enum v3kios_lifecycle_state_v1 {
@@ -95,7 +96,9 @@ typedef enum v3kios_direct_boot_blocker_v1 {
     V3KIOS_DIRECT_BOOT_BLOCKER_MODULE_LOAD_FAILED = 8,
     V3KIOS_DIRECT_BOOT_BLOCKER_MAIN_THREAD_FAILED = 9,
     V3KIOS_DIRECT_BOOT_BLOCKER_RENDERER_FAILED = 10,
-    V3KIOS_DIRECT_BOOT_BLOCKER_DISPLAY_SURFACE_MISSING = 11
+    V3KIOS_DIRECT_BOOT_BLOCKER_DISPLAY_SURFACE_MISSING = 11,
+    V3KIOS_DIRECT_BOOT_BLOCKER_JIT_NOT_ENABLED = 12,
+    V3KIOS_DIRECT_BOOT_BLOCKER_FIRMWARE_NOT_READY = 13
 } v3kios_direct_boot_blocker_v1;
 
 typedef enum v3kios_input_button_v1 {
@@ -261,6 +264,10 @@ v3kios_result_v1 v3kios_core_inspect_firmware_pup(
     v3kios_core_handle_t handle,
     const char* pup_path,
     v3kios_pup_info_v1* out_info);
+v3kios_result_v1 v3kios_core_install_firmware_pup(
+    v3kios_core_handle_t handle,
+    const char* pup_path,
+    const char* vita_fs_root);
 v3kios_result_v1 v3kios_core_inventory_firmware(
     v3kios_core_handle_t handle,
     const char* vita_fs_root,
@@ -289,6 +296,7 @@ v3kios_result_v1 v3kios_core_attach_display_surface(
     const v3kios_display_surface_v1* surface);
 v3kios_result_v1 v3kios_core_detach_display_surface(v3kios_core_handle_t handle);
 v3kios_result_v1 v3kios_core_stop_session(v3kios_core_handle_t handle);
+int v3kios_core_is_jit_enabled(void);
 const char* v3kios_result_description(v3kios_result_v1 result);
 const char* v3kios_boot_checkpoint_description(v3kios_boot_checkpoint_v1 checkpoint);
 const char* v3kios_boot_blocker_description(v3kios_boot_blocker_v1 blocker);

@@ -6,6 +6,11 @@ bool IsFullCoreLinked() {
     return false;
 }
 
+bool InstallFirmwarePup(const std::filesystem::path&,
+                        const std::filesystem::path&) {
+    return false;
+}
+
 SystemBootResult BootSystemSoftware(const std::filesystem::path&,
                                     const std::filesystem::path&) {
     return {
@@ -19,7 +24,9 @@ SystemBootResult BootSystemSoftware(const std::filesystem::path&,
 
 DirectBootResult BootDirectGame(const std::filesystem::path&,
                                 const std::filesystem::path&,
-                                const std::string&) {
+                                const std::string&,
+                                const std::filesystem::path&,
+                                const std::filesystem::path&) {
     return {
         .result = V3KIOS_RESULT_UNSUPPORTED,
         .checkpoint = V3KIOS_DIRECT_BOOT_CHECKPOINT_EBOOT_CONTAINER_VERIFIED,

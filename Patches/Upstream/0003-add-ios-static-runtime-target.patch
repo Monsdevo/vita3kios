@@ -1,0 +1,552 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d9edf977..7898afc3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -9,6 +9,14 @@ endif()
+ 
+ project(Vita3K)
+ 
++if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++	set(VITA3K_IOS TRUE)
++	set(USE_DISCORD_RICH_PRESENCE OFF CACHE BOOL "" FORCE)
++	set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
++	set(SDL_SHARED OFF CACHE BOOL "" FORCE)
++	set(SDL_STATIC ON CACHE BOOL "" FORCE)
++endif()
++
+ # Detects the amount of processors of the host machine and forwards the result to CPU_COUNT
+ include(ProcessorCount)
+ ProcessorCount(CPU_COUNT)
+@@ -20,12 +28,15 @@ set(CMAKE_CXX_STANDARD 23)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+ set(CMAKE_CXX_EXTENSIONS OFF)
+-set(CMAKE_OSX_DEPLOYMENT_TARGET 13.3)
++if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
++	set(CMAKE_OSX_DEPLOYMENT_TARGET 13.3)
++endif()
+ 
+ # workaround for SDL due to cmake bug
+ # https://github.com/libsdl-org/SDL/issues/6454
+ # https://gitlab.kitware.com/cmake/cmake/-/issues/24104
+ if(APPLE)
+     enable_language(OBJC)
++    enable_language(OBJCXX)
+ endif()
+ 
+ if(ANDROID)
+@@ -293,4 +304,6 @@ endif()
+ 
+ add_subdirectory(external)
+ add_subdirectory(vita3k)
+-add_subdirectory(tools/gen-modules)
++if(NOT VITA3K_IOS)
++	add_subdirectory(tools/gen-modules)
++endif()
+diff --git a/external/CMakeLists.txt b/external/CMakeLists.txt
+index a26cd3ac..0a60a7da 100644
+--- a/external/CMakeLists.txt
++++ b/external/CMakeLists.txt
+@@ -84,7 +84,8 @@ add_library(miniz STATIC miniz/miniz.c miniz/miniz.h)
+ target_include_directories(miniz PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/miniz")
+ 
+ add_subdirectory(sdl)
+ 
++if(NOT VITA3K_IOS)
+ # Cubeb setup, from https://github.com/RPCS3/rpcs3/blob/master/3rdparty/cubeb/CMakeLists.txt
+ set(BUILD_SHARED_LIBS FALSE CACHE BOOL "Don't build shared libs")
+ set(BUILD_TESTS FALSE CACHE BOOL "Don't build tests")
+@@ -106,6 +107,7 @@ elseif (ARCHITECTURE STREQUAL "x86_64")
+ 		_USE_SSE2
+ 	)
+ endif ()
++endif()
+ 
+ if(ANDROID)
+ 	if(ARCHITECTURE STREQUAL "arm64")
+@@ -227,7 +227,16 @@ target_include_directories(CLI11 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/cli11")
+ 
+ add_library(vulkan INTERFACE)
+ target_include_directories(vulkan INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/VulkanMemoryAllocator-Hpp/Vulkan-Headers/include")
+-if(APPLE)
++if(VITA3K_IOS)
++	if(NOT VITA3K_IOS_MOLTENVK_ROOT)
++		message(FATAL_ERROR "VITA3K_IOS_MOLTENVK_ROOT is required")
++	endif()
++	target_include_directories(vulkan INTERFACE "${VITA3K_IOS_MOLTENVK_ROOT}/include")
++	add_library(moltenvk-ios STATIC IMPORTED GLOBAL)
++	set_target_properties(moltenvk-ios PROPERTIES IMPORTED_LOCATION
++		"${VITA3K_IOS_MOLTENVK_ROOT}/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a")
++	target_link_libraries(vulkan INTERFACE moltenvk-ios)
++elseif(APPLE)
+ 	if(NOT EXISTS "${CMAKE_BINARY_DIR}/external/MoltenVK-macos.tar")
+ 		message(STATUS "Downloading MoltenVK...")
+ 		file(DOWNLOAD https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.1/MoltenVK-macos.tar
+@@ -273,23 +282,53 @@ target_include_directories(vma INTERFACE
+ if(ANDROID)
+ 	set(USE_STATIC_ANDROID_FFMPEG ON)
+ endif()
+-add_subdirectory(ffmpeg)
++if(VITA3K_IOS)
++	if(NOT VITA3K_IOS_DEPENDENCY_PREFIX)
++		message(FATAL_ERROR "VITA3K_IOS_DEPENDENCY_PREFIX is required")
++	endif()
++	add_library(ffmpeg INTERFACE)
++	target_include_directories(ffmpeg INTERFACE "${VITA3K_IOS_DEPENDENCY_PREFIX}/include")
++	target_link_libraries(ffmpeg INTERFACE
++		"${VITA3K_IOS_DEPENDENCY_PREFIX}/lib/libavformat.a"
++		"${VITA3K_IOS_DEPENDENCY_PREFIX}/lib/libavcodec.a"
++		"${VITA3K_IOS_DEPENDENCY_PREFIX}/lib/libswscale.a"
++		"${VITA3K_IOS_DEPENDENCY_PREFIX}/lib/libavutil.a"
++		"${VITA3K_IOS_DEPENDENCY_PREFIX}/lib/libavfilter.a"
++		"${VITA3K_IOS_DEPENDENCY_PREFIX}/lib/libswresample.a"
++		"-framework AudioToolbox" "-framework CoreFoundation"
++		"-framework CoreMedia" "-framework CoreVideo"
++		"-framework Security" "-framework VideoToolbox")
++else()
++	add_subdirectory(ffmpeg)
++endif()
+ 
+-if(APPLE OR NOT FORCE_BUILD_OPENSSL_MAC)
++if(NOT VITA3K_IOS AND (APPLE OR NOT FORCE_BUILD_OPENSSL_MAC))
+ 	execute_process(
+ 		COMMAND brew --prefix openssl
+ 		RESULT_VARIABLE BREW_RESULT
+ 		OUTPUT_VARIABLE BREW_OPENSSL
+ 		OUTPUT_STRIP_TRAILING_WHITESPACE
+ 	)
+ 	if(BREW_RESULT EQUAL 0)
+ 		set(OPENSSL_ROOT_DIR "${BREW_OPENSSL}")
+ 		set(OPENSSL_USE_STATIC_LIBS TRUE)
+ 	endif()
+ endif()
+ 
+-if(NOT FORCE_BUILD_OPENSSL_MAC)
++if(VITA3K_IOS)
++	add_library(OpenSSL::Crypto STATIC IMPORTED GLOBAL)
++	set_target_properties(OpenSSL::Crypto PROPERTIES IMPORTED_LOCATION
++		"${VITA3K_IOS_DEPENDENCY_PREFIX}/lib/libcrypto.a")
++	target_include_directories(OpenSSL::Crypto INTERFACE "${VITA3K_IOS_DEPENDENCY_PREFIX}/include")
++	add_library(OpenSSL::SSL STATIC IMPORTED GLOBAL)
++	set_target_properties(OpenSSL::SSL PROPERTIES IMPORTED_LOCATION
++		"${VITA3K_IOS_DEPENDENCY_PREFIX}/lib/libssl.a")
++	target_include_directories(OpenSSL::SSL INTERFACE "${VITA3K_IOS_DEPENDENCY_PREFIX}/include")
++	set(OPENSSL_FOUND TRUE)
++	set(OPENSSL_INCLUDE_DIR "${VITA3K_IOS_DEPENDENCY_PREFIX}/include")
++	set(OPENSSL_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
++elseif(NOT FORCE_BUILD_OPENSSL_MAC)
+ 	find_package(OpenSSL QUIET)
+ endif()
+ 
+ if(NOT OPENSSL_FOUND OR FORCE_BUILD_OPENSSL_MAC)
+@@ -365,7 +406,16 @@ target_link_libraries(crypto INTERFACE OpenSSL::Crypto)
+ # Must be after openssl
+ add_subdirectory(psvpfstools)
+ 
+-find_package(CURL QUIET)
++if(VITA3K_IOS)
++	add_library(CURL::libcurl STATIC IMPORTED GLOBAL)
++	set_target_properties(CURL::libcurl PROPERTIES IMPORTED_LOCATION
++		"${VITA3K_IOS_DEPENDENCY_PREFIX}/lib/libcurl.a")
++	target_include_directories(CURL::libcurl INTERFACE
++		"${VITA3K_IOS_DEPENDENCY_PREFIX}/include")
++	set(CURL_FOUND TRUE)
++else()
++	find_package(CURL QUIET)
++endif()
+ if(NOT CURL_FOUND)
+ 	message("System curl not found, compiling curl from source")
+ 	include(FetchContent)
+@@ -467,7 +494,7 @@ endif()
+ # Use XDG desktop portals on Linux
+ set(NFD_PORTAL ON)
+ 
+-if(NOT ANDROID)
++if(NOT ANDROID AND NOT VITA3K_IOS)
+ 	# nativefiledialog-extended
+ 	add_subdirectory(nativefiledialog-extended)
+ 
+diff --git a/vita3k/CMakeLists.txt b/vita3k/CMakeLists.txt
+index e4126f8f..3b68ff22 100644
+--- a/vita3k/CMakeLists.txt
++++ b/vita3k/CMakeLists.txt
+@@ -103,7 +103,7 @@ if(NOT MSVC)
+ 	add_compile_options(-Wformat -Werror=format-security)
+ endif()
+
+-if(NOT ANDROID)
++if(NOT ANDROID AND NOT VITA3K_IOS)
+ 	include(${CMAKE_SOURCE_DIR}/cmake/qt6.cmake)
+ endif()
+ 
+@@ -121,7 +121,7 @@ add_subdirectory(display)
+ add_subdirectory(features)
+ add_subdirectory(glutil)
+ add_subdirectory(updater)
+-if(NOT ANDROID)
++if(NOT ANDROID AND NOT VITA3K_IOS)
+ 	add_subdirectory(gui-qt)
+ endif()
+ add_subdirectory(gxm)
+@@ -201,6 +201,9 @@ if(ANDROID)
+ 		endforeach()
+ 		set_target_properties(vita3k PROPERTIES LINK_FLAGS "${LIBS_TO_EXCLUDE_FLAG}")
+ 	endif()
++elseif(VITA3K_IOS)
++	add_library(vita3k STATIC interface.cpp interface.h performance.cpp)
++	target_link_libraries(vita3k PRIVATE pugixml::pugixml)
+ else()
+ 	add_executable(vita3k MACOSX_BUNDLE main.cpp interface.cpp interface.h performance.cpp)
+ endif()
+@@ -211,14 +214,14 @@ if(WIN32)
+ endif()
+ 
+ target_link_libraries(vita3k PRIVATE app audio compat config cppcommon ctrl dialog display ime lang gdbstub gxm io miniz modules motion packages patch renderer shader touch util psvpfsparser)
+-if(NOT ANDROID)
++if(NOT ANDROID AND NOT VITA3K_IOS)
+ 	target_link_libraries(vita3k PRIVATE gui-qt)
+ endif()
+ if(USE_DISCORD_RICH_PRESENCE)
+ 	target_link_libraries(vita3k PRIVATE discord-rpc)
+ endif()
+ 
+-if(NOT ANDROID)
++if(NOT ANDROID AND NOT VITA3K_IOS)
+ 	file(GLOB VITA3K_QT_TS_FILES CONFIGURE_DEPENDS
+ 		"${CMAKE_SOURCE_DIR}/i18n/qt/*.ts")
+ 	set(VITA3K_QT_QM_DIR "${CMAKE_BINARY_DIR}/qt_translations")
+@@ -260,7 +262,7 @@ if(NOT ANDROID)
+ 		RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+ endif()
+ 
+-if(APPLE)
++if(APPLE AND NOT VITA3K_IOS)
+ 	add_custom_command(
+ 		OUTPUT Vita3K.icns
+ 		COMMAND mkdir -p Vita3K.iconset
+diff --git a/vita3k/renderer/CMakeLists.txt b/vita3k/renderer/CMakeLists.txt
+index 0e409449..0c6a8ddb 100644
+--- a/vita3k/renderer/CMakeLists.txt
++++ b/vita3k/renderer/CMakeLists.txt
+@@ -55,9 +55,12 @@ if(ANDROID)
+ 	target_link_libraries(renderer PRIVATE android adrenotools)
+ endif()
+ 
+-if(APPLE)
++if(APPLE AND NOT VITA3K_IOS)
+ 	target_sources(renderer PRIVATE src/vulkan/metal_layer.mm)
+ 	target_link_libraries(renderer PRIVATE "-framework QuartzCore" "-framework Cocoa")
++elseif(VITA3K_IOS)
++	target_sources(renderer PRIVATE "${VITA3K_IOS_METAL_LAYER_SOURCE}")
++	target_link_libraries(renderer PRIVATE "-framework QuartzCore")
+ endif()
+ 
+ if(X11_FOUND)
+
+diff --git a/vita3k/audio/CMakeLists.txt b/vita3k/audio/CMakeLists.txt
+index 2b989c20..d4490314 100644
+--- a/vita3k/audio/CMakeLists.txt
++++ b/vita3k/audio/CMakeLists.txt
+@@ -1,9 +1,15 @@
+-add_library(
+-    audio
+-    STATIC
+-    src/audio.cpp
+-    src/impl/sdl_audio.cpp
+-    src/impl/cubeb_audio.cpp)
++set(AUDIO_SOURCES
++    src/audio.cpp
++    src/impl/sdl_audio.cpp)
++if(NOT VITA3K_IOS)
++    list(APPEND AUDIO_SOURCES src/impl/cubeb_audio.cpp)
++endif()
++add_library(audio STATIC ${AUDIO_SOURCES})
+ 
+ target_include_directories(audio PUBLIC include)
+-target_link_libraries(audio PRIVATE util cubeb SDL3::SDL3)
++target_link_libraries(audio PRIVATE util SDL3::SDL3)
++if(VITA3K_IOS)
++    target_compile_definitions(audio PRIVATE VITA3K_IOS=1)
++else()
++    target_link_libraries(audio PRIVATE cubeb)
++endif()
+diff --git a/vita3k/audio/src/audio.cpp b/vita3k/audio/src/audio.cpp
+index 996451bc..379175ca 100644
+--- a/vita3k/audio/src/audio.cpp
++++ b/vita3k/audio/src/audio.cpp
+@@ -17,7 +17,9 @@
+ 
+ #include <audio/state.h>
+ 
++#ifndef VITA3K_IOS
+ #include <audio/impl/cubeb_audio.h>
++#endif
+ #include <audio/impl/sdl_audio.h>
+ 
+ #include <util/log.h>
+@@ -70,8 +72,10 @@ void AudioState::set_backend(const std::string &adapter_name) {
+     if (adapter_name == "SDL") {
+         adapter = std::make_unique<SDLAudioAdapter>(*this);
+     } else if (adapter_name == "Cubeb") {
++#ifndef VITA3K_IOS
+         adapter = std::make_unique<CubebAudioAdapter>(*this);
++#endif
+     } else {
+         LOG_ERROR("Unknown audio adapter {}", adapter_name);
+         return;
+     }
+
+diff --git a/vita3k/codec/src/aac.cpp b/vita3k/codec/src/aac.cpp
+--- a/vita3k/codec/src/aac.cpp
++++ b/vita3k/codec/src/aac.cpp
+@@ -24,8 +24,6 @@ extern "C" {
+ #include <libavformat/avformat.h>
+ #include <libavutil/opt.h>
+ #include <libswresample/swresample.h>
+-
+-#include <libavcodec/codec_internal.h>
+ }
+ 
+ #include <util/log.h>
+@@ -81,18 +79,24 @@ bool AacDecoderState::send(const uint8_t *data, uint32_t size) {
+ 
+     av_frame_unref(frame);
+ 
+-    const FFCodec *ff_codec = ffcodec(codec);
+-    int got_frame;
+-    int len = ff_codec->cb.decode(context, frame, &got_frame, packet);
+-    assert(got_frame);
++    int result = avcodec_send_packet(context, packet);
++    if (result < 0) {
++        av_packet_free(&packet);
++        LOG_WARN("Error sending Aac packet: {}.", codec_error_name(result));
++        return false;
++    }
+ 
++    result = avcodec_receive_frame(context, frame);
+     av_packet_free(&packet);
+-    if (len < 0) {
+-        LOG_WARN("Error sending Aac packet: {}.", codec_error_name(len));
++    if (result < 0) {
++        LOG_WARN("Error receiving Aac frame: {}.", codec_error_name(result));
+         return false;
+     }
+ 
+-    es_size_used = static_cast<uint32_t>(len);
++    // The public FFmpeg send/receive API accepts the complete packet. Vita3K's
++    // previous use of FFmpeg's private FFCodec API returned a consumed-byte
++    // count, but private headers are intentionally unavailable to consumers.
++    es_size_used = size;
+ 
+     return true;
+ }
+
+diff --git a/vita3k/modules/SceNet/macos_net_helper.cpp b/vita3k/modules/SceNet/macos_net_helper.cpp
+--- a/vita3k/modules/SceNet/macos_net_helper.cpp
++++ b/vita3k/modules/SceNet/macos_net_helper.cpp
+@@ -18,6 +18,7 @@
+ #include "macos_net_helper.h"
+ 
+ #include <SystemConfiguration/SystemConfiguration.h>
++#include <TargetConditionals.h>
+ #include <cstring>
+ #include <ifaddrs.h>
+ #include <net/if.h>
+@@ -30,6 +31,31 @@ bool is_physical_interface(const char *name) {
+ 
+ // Get the primary network interface name using SystemConfiguration
+ bool get_primary_interface_name(char *dest, size_t bufferSize) {
++#if TARGET_OS_IPHONE
++    if (!dest || bufferSize == 0)
++        return false;
++
++    struct ifaddrs *iflist = nullptr;
++    if (getifaddrs(&iflist) != 0)
++        return false;
++
++    bool success = false;
++    for (struct ifaddrs *cur = iflist; cur; cur = cur->ifa_next) {
++        if (!cur->ifa_addr || !cur->ifa_name)
++            continue;
++        if (!(cur->ifa_flags & IFF_UP) || (cur->ifa_flags & IFF_LOOPBACK))
++            continue;
++        if (!is_physical_interface(cur->ifa_name))
++            continue;
++        if (cur->ifa_addr->sa_family != AF_INET && cur->ifa_addr->sa_family != AF_INET6)
++            continue;
++        strlcpy(dest, cur->ifa_name, bufferSize);
++        success = true;
++        break;
++    }
++    freeifaddrs(iflist);
++    return success;
++#else
+     bool success = false;
+     auto size = static_cast<CFIndex>(bufferSize);
+ 
+@@ -64,6 +89,7 @@ bool get_primary_interface_name(char *dest, size_t bufferSize) {
+ 
+     CFRelease(store);
+     return success;
++#endif
+ }
+ 
+ // Get MAC address from a physical interface
+
+diff --git a/vita3k/renderer/src/vulkan/renderer.cpp b/vita3k/renderer/src/vulkan/renderer.cpp
+--- a/vita3k/renderer/src/vulkan/renderer.cpp
++++ b/vita3k/renderer/src/vulkan/renderer.cpp
+@@ -43,6 +43,12 @@
+ #include <unordered_set>
+ 
+ #ifdef __APPLE__
++#include <TargetConditionals.h>
+ #include <MoltenVK/mvk_vulkan.h>
++
++#if TARGET_OS_IPHONE
++extern "C" VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(
++    VkInstance instance, const char *name);
++#endif
+ #endif
+ 
+@@ -371,7 +377,9 @@ bool VKState::create(std::unique_ptr<renderer::State> &state, const Config &conf
+ 
+     // Create Instance
+     {
+-#if defined(__ANDROID__) && defined(USE_ADRENO_TOOLS)
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++        VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
++#elif defined(__ANDROID__) && defined(USE_ADRENO_TOOLS)
+         PFN_vkGetInstanceProcAddr vk_get_instance_proc_addr = android_driver::resolve_vk_get_instance_proc_addr(config.current_config.custom_driver_name);
+         if (!vk_get_instance_proc_addr)
+             return false;
+@@ -1680,7 +1688,9 @@ renderer::VulkanDeviceInfo renderer::enumerate_vulkan_devices(const std::string
+ 
+     try {
+         vk::detail::DispatchLoaderDynamic dispatch;
+-#ifdef __ANDROID__
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++        dispatch.init(vkGetInstanceProcAddr);
++#elif defined(__ANDROID__)
+         PFN_vkGetInstanceProcAddr vk_get_instance_proc_addr = android_driver::resolve_vk_get_instance_proc_addr(custom_driver_name);
+         if (!vk_get_instance_proc_addr)
+             return info;
+diff --git a/external/dynarmic/src/dynarmic/backend/arm64/address_space.h b/external/dynarmic/src/dynarmic/backend/arm64/address_space.h
+--- a/external/dynarmic/src/dynarmic/backend/arm64/address_space.h
++++ b/external/dynarmic/src/dynarmic/backend/arm64/address_space.h
+@@ -10,6 +10,7 @@
+ 
+ #include <mcl/stdint.hpp>
+ #include <oaknut/code_block.hpp>
++#include <oaknut/dual_code_block.hpp>
+ #include <oaknut/oaknut.hpp>
+ #include <tsl/robin_map.h>
+ #include <tsl/robin_set.h>
+@@ -50,17 +51,37 @@
+     virtual void RegisterNewBasicBlock(const IR::Block& block, const EmittedBlockInfo& block_info) = 0;
+ 
+     void ProtectCodeMemory() {
+-#if defined(DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT) || defined(__APPLE__) || defined(__OpenBSD__)
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++        // The iOS code cache uses permanently separate RW and RX aliases.
++#elif defined(DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT) || defined(__APPLE__) || defined(__OpenBSD__)
+         mem.protect();
+ #endif
+     }
+ 
+     void UnprotectCodeMemory() {
+-#if defined(DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT) || defined(__APPLE__) || defined(__OpenBSD__)
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++        // The iOS code cache uses permanently separate RW and RX aliases.
++#elif defined(DYNARMIC_ENABLE_NO_EXECUTE_SUPPORT) || defined(__APPLE__) || defined(__OpenBSD__)
+         mem.unprotect();
+ #endif
+     }
+ 
++    u32* WritableCodeMemory() const {
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++        return mem.wptr();
++#else
++        return mem.ptr();
++#endif
++    }
++
++    u32* ExecutableCodeMemory() const {
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++        return mem.xptr();
++#else
++        return mem.ptr();
++#endif
++    }
++
+     size_t GetRemainingSize();
+     EmittedBlockInfo Emit(IR::Block ir_block);
+     void Link(EmittedBlockInfo& block);
+@@ -70,7 +91,11 @@
+     FakeCall FastmemCallback(u64 host_pc);
+ 
+     const size_t code_cache_size;
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++    oaknut::DualCodeBlock mem;
++#else
+     oaknut::CodeBlock mem;
++#endif
+     oaknut::CodeGenerator code;
+ 
+     // A IR::LocationDescriptor will have one current CodePtr.
+diff --git a/external/dynarmic/src/dynarmic/backend/arm64/address_space.cpp b/external/dynarmic/src/dynarmic/backend/arm64/address_space.cpp
+--- a/external/dynarmic/src/dynarmic/backend/arm64/address_space.cpp
++++ b/external/dynarmic/src/dynarmic/backend/arm64/address_space.cpp
+@@ -23,11 +23,13 @@
+ AddressSpace::AddressSpace(size_t code_cache_size)
+         : code_cache_size(code_cache_size)
+         , mem(code_cache_size)
+-        , code(mem.ptr(), mem.ptr())
++        , code(WritableCodeMemory(), ExecutableCodeMemory())
+         , fastmem_manager(exception_handler) {
+     ASSERT_MSG(code_cache_size <= 128 * 1024 * 1024, "code_cache_size > 128 MiB not currently supported");
+ 
++#if !defined(__APPLE__) || !TARGET_OS_IPHONE
+     exception_handler.Register(mem, code_cache_size);
++#endif
+     exception_handler.SetFastmemCallback([this](u64 host_pc) {
+         return FastmemCallback(host_pc);
+     });
+@@ -98,7 +100,7 @@
+ }
+ 
+ void AddressSpace::DumpDisassembly() const {
+-    for (u32* ptr = mem.ptr(); ptr < code.xptr<u32*>(); ptr++) {
++    for (u32* ptr = ExecutableCodeMemory(); ptr < code.xptr<u32*>(); ptr++) {
+         std::printf("%s", Common::DisassembleAArch64(*ptr, mcl::bit_cast<u64>(ptr)).c_str());
+     }
+ }
+@@ -136,7 +138,7 @@
+     using namespace oaknut::util;
+ 
+     for (auto [ptr_offset, target] : block_info.relocations) {
+-        CodeGenerator c{mem.ptr(), mem.ptr()};
++        CodeGenerator c{WritableCodeMemory(), ExecutableCodeMemory()};
+         c.set_xptr(reinterpret_cast<u32*>(block_info.entry_point + ptr_offset));
+ 
+         switch (target) {
+@@ -276,7 +278,7 @@
+     using namespace oaknut::util;
+ 
+     for (auto [ptr_offset, type] : block_relocations_list) {
+-        CodeGenerator c{mem.ptr(), mem.ptr()};
++        CodeGenerator c{WritableCodeMemory(), ExecutableCodeMemory()};
+         c.set_xptr(reinterpret_cast<u32*>(entry_point + ptr_offset));
+ 
+         switch (type) {
+diff --git a/external/dynarmic/externals/oaknut/include/oaknut/dual_code_block.hpp b/external/dynarmic/externals/oaknut/include/oaknut/dual_code_block.hpp
+--- a/external/dynarmic/externals/oaknut/include/oaknut/dual_code_block.hpp
++++ b/external/dynarmic/externals/oaknut/include/oaknut/dual_code_block.hpp
+@@ -81,6 +81,8 @@
+ #if defined(_WIN32)
+         VirtualFree((void*)m_xmem, 0, MEM_RELEASE);
+ #elif defined(__APPLE__)
++        munmap(m_wmem, m_size);
++        munmap(m_xmem, m_size);
+ #else
+         munmap(m_wmem, m_size);
+         munmap(m_xmem, m_size);

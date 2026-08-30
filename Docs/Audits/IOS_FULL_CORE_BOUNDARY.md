@@ -4,7 +4,8 @@ Pinned upstream: `496939b602703951277263c7b3e60a9ae36879c1`
 
 ## Measured launch path
 
-The pinned upstream runtime is not a reusable headless library yet.
+The pinned upstream runtime was not originally exposed as a reusable Apple
+headless library. vita3kios now provides that composition for Direct Game.
 
 1. `vita3k/app/src/session_controller.cpp` begins every launch with
    `setup_game_launch()`, which resolves an installed `ux0` application.
@@ -17,10 +18,10 @@ The pinned upstream runtime is not a reusable headless library yet.
 5. Upstream CMake creates a Qt executable on Apple platforms. Its only existing
    UI-free shared-library composition is the Android/JNI target.
 
-This explains the current typed blocker. The iOS app can resolve and validate
-the authentic firmware shell, but calling the real loader requires a reusable
-runtime composition plus a SystemShell content mount that does not impersonate
-an installed `ux0/app/<TITLE_ID>`.
+The iOS static target now composes the required Direct Game sources without Qt,
+Discord, JNI, or the desktop `main()`. System Software still requires a distinct
+SystemShell content resolver and process/service lifecycle; it must not reuse the
+installed-title `ux0/app/<TITLE_ID>` path deceptively.
 
 ## Firmware installer graph
 
@@ -34,40 +35,38 @@ depends on:
 - `libfat16`, `miniz`, `psvpfstools`, and `vita-toolchain`;
 - the existing logging and filesystem abstractions.
 
-These dependencies do not yet have a verified iPhoneOS static composition. The
-native app therefore exposes PUP structural validation, but it does not claim
-that validation installed firmware.
+These dependencies now build into the verified iPhoneOS arm64 static archive.
+ABI v4 invokes the real `install_pup()` path in app-owned staging, inventories
+the extracted result, and promotes a valid immutable firmware generation.
 
 ## Integration seam added by vita3kios
 
-`App/Core/src/runtime.h` is the private boundary between stable ABI v2 and the
-full emulator composition. `runtime_stub.cpp` is compiled today and returns the
-exact `UPSTREAM_CORE_NOT_LINKED` blocker after the SceShell SELF preflight.
+`App/Core/src/runtime.h` remains the private boundary behind stable ABI v4.
+Physical-device builds compile `runtime_vita3k.cpp`; host and Simulator builds
+retain `runtime_stub.cpp` so parser and UI tests never claim guest execution.
 
-The stub must be replaced, not bypassed, by a runtime implementation that:
+The physical-device Direct Game implementation:
 
-1. owns an initialized `EmuEnvState` and serialized session lifecycle;
-2. resolves a typed SystemShell target to the selected firmware generation;
-3. mounts the firmware system-content root directly as `app0` for SceShell;
-4. invokes the real Vita3K module loader and records its module ID;
-5. starts the guest main thread and watchdog;
-6. publishes missing NID, sysmodule, IPC, registry, event, and framebuffer
-   blockers without copying proprietary payloads into diagnostics;
-7. enables `V3KIOS_CAPABILITY_SYSTEM_SOFTWARE` only after the implementation is
-   linked and its minimum runtime contract is available.
+1. owns an initialized `EmuEnvState` and serialized `AppSessionController`;
+2. mounts the imported game as `ux0/app/<TITLE_ID>` and the selected firmware
+   partitions as app-owned VitaFS system roots;
+3. invokes the real module loader and starts the guest main thread;
+4. connects Dynarmic to separate writable/executable iOS code-cache aliases;
+5. connects the Vulkan renderer to the SwiftUI-owned `CAMetalLayer` via MoltenVK;
+6. forwards controller state and validity-tagged frame metrics through the C ABI.
 
 ## Ordered next build slices
 
-The full runtime should be introduced in independently testable slices:
+The remaining ordered slices are:
 
-1. Cross-compile and link the PUP installer dependency graph for iPhoneOS.
-2. Create a Qt/Discord-free upstream static runtime composition based on the
-   Android target's source boundary, without JNI or Android platform code.
-3. Add the typed SystemShell resolver and direct system-content mount.
-4. Reach `CORE_INITIALIZED`, then `MAIN_MODULE_LOADED`, then
-   `MAIN_THREAD_STARTED` in separate commits with typed failures.
-5. Connect the existing MoltenVK and JIT device paths and require a real guest
-   SceShell frame before enabling the public System Software capability.
+1. Install a user-supplied official PUP on device and repeat Direct Game boot.
+2. Require a visible first guest frame and nonzero frame metrics before calling
+   Direct Game playable.
+3. Add a typed SystemShell resolver and direct system-content mount separately.
+4. Publish missing NID, sysmodule, IPC, registry, event, and framebuffer blockers
+   without copying proprietary payloads into diagnostics.
+5. Require a real guest SceShell frame before enabling the public System Software
+   capability.
 
 This ordering prevents PUP installation, SELF parsing, guest execution, and
 interactive System Software from being collapsed into one misleading status.

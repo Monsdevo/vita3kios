@@ -43,9 +43,18 @@ fi
 
 VITA3KIOS_STATIC_REL="MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a"
 VITA3KIOS_HEADERS_REL="MoltenVK/MoltenVK/include/vulkan/vulkan.h"
+VITA3KIOS_EXTRACT_PACKAGE=0
 
 if [ ! -f "$VITA3KIOS_PACKAGE/$VITA3KIOS_STATIC_REL" ] || \
    [ ! -f "$VITA3KIOS_PACKAGE/$VITA3KIOS_HEADERS_REL" ]; then
+    VITA3KIOS_EXTRACT_PACKAGE=1
+else
+    case "$(ls -lO "$VITA3KIOS_PACKAGE/$VITA3KIOS_STATIC_REL")" in
+        *dataless*) VITA3KIOS_EXTRACT_PACKAGE=1 ;;
+    esac
+fi
+
+if [ "$VITA3KIOS_EXTRACT_PACKAGE" -eq 1 ]; then
     mkdir -p -- "$VITA3KIOS_STAGE"
     tar xf "$VITA3KIOS_ARCHIVE" -C "$VITA3KIOS_STAGE"
     if [ ! -f "$VITA3KIOS_STAGE/$VITA3KIOS_STATIC_REL" ] || \

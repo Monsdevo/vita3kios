@@ -10,34 +10,25 @@ built by porting the Vita3K core into an Apple-native application.
 
 ## Project status
 
-Phase 1 and milestone M0 are complete. The pinned Vita3K source builds and
-passes its selected tests from a clean macOS arm64 checkout.
+Milestones M0 through M3 are complete. The pinned Vita3K source builds for
+macOS and iPhoneOS arm64, Dynarmic JIT and MoltenVK have run on a physical
+iPhone, and the signed Apple-native app links and queries the Vita3K core.
 
-Phase 2A is in progress. Independent iPhoneOS arm64 probes for Dynarmic JIT and
-MoltenVK compile, sign, and pass artifact inspection. The MoltenVK probe now
-presents both a clear frame and a triangle using pinned Vita3K SPIR-V. Signed
-physical-device runtime reports are still required, so M1 and M2 remain open.
-
-The first M3 product scaffold also exists. Its Apple-native SwiftUI shell links
-a versioned C ABI and a real pinned Vita3K allocator source, displays core
-version/capability diagnostics, and passes host and Simulator smoke tests. The
-signed app installs on a physical iPhone; an unlocked-device launch report is
-still required before M3 can be closed.
-
-ABI v3 adds safe extracted-game inventory and import, bounded `param.sfo`
+ABI v4 provides safe extracted-game inventory and import, bounded `param.sfo`
 metadata parsing, authentic `eboot.bin` SELF preflight, typed Direct Game boot
 checkpoints, input state, and validity-tagged performance snapshots. The native
-gameplay surface owns a `CAMetalLayer`, attaches its drawable to ABI v3 before
+gameplay surface owns a `CAMetalLayer`, attaches its drawable before
 boot, and includes a Vita touch-controller overlay plus compact top-left HUD.
-The full Vita3K loader/Dynarmic/renderer graph is not yet
-linked, so imported games are not playable yet. See
+The pinned Vita3K loader, HLE services, Dynarmic CPU, audio stack, Vulkan
+renderer, and MoltenVK dispatcher are linked. A Minecraft device test reaches
+guest main-thread and render-thread execution; first guest-frame presentation
+remains the active Direct Game gate. See
 [Docs/DIRECT_GAME_BOOTSTRAP.md](Docs/DIRECT_GAME_BOOTSTRAP.md).
 
-The same ABI retains official PUP structural validation, app-owned extracted VitaFS
-generations, firmware partition inventory, and a typed System Software boot
-preflight. Synthetic tests reach the authentic `sce_shell.self` container. The
-full Vita3K loader/HLE/renderer graph is not linked into the iOS target yet, so
-no guest firmware instruction or interactive LiveArea frame is claimed. See
+ABI v4 also connects Vita3K's real PUP decryption and FAT/exFAT extraction path.
+An official user-selected PUP can be installed into an app-owned immutable
+VitaFS generation, inventoried, and mounted into Direct Game sessions. No guest
+firmware shell instruction or interactive LiveArea frame is claimed. See
 [Docs/FIRMWARE_BOOTSTRAP.md](Docs/FIRMWARE_BOOTSTRAP.md) for the exact checkpoint,
 current blocker, and device test flow.
 
@@ -45,7 +36,7 @@ The current game importer accepts only an extracted folder containing
 `eboot.bin` and `sce_sys/param.sfo`; `sce_sys/icon0.png` is optional. It may also
 accept one parent folder containing exactly one such game root. VPK, ZIP, PKG,
 updates, DLC, and retail license/decryption transactions are not implemented yet.
-Passing this import preflight does not currently imply playability.
+Passing import preflight does not guarantee title compatibility.
 
 See [ROADMAP.txt](ROADMAP.txt) for the authoritative plan, acceptance gates,
 and current progress.

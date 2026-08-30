@@ -22,11 +22,15 @@ struct DirectBootResult {
 };
 
 bool IsFullCoreLinked();
+bool InstallFirmwarePup(const std::filesystem::path& pupPath,
+                        const std::filesystem::path& vitaFsRoot);
 SystemBootResult BootSystemSoftware(const std::filesystem::path& vitaFsRoot,
                                     const std::filesystem::path& shellRelativePath);
 DirectBootResult BootDirectGame(const std::filesystem::path& gameRoot,
                                 const std::filesystem::path& ebootRelativePath,
-                                const std::string& titleId);
+                                const std::string& titleId,
+                                const std::filesystem::path& dataRoot,
+                                const std::filesystem::path& firmwareRoot);
 void SetInputState(const v3kios_input_state_v1& input);
 void GetMetrics(v3kios_metrics_v1& metrics);
 void AttachDisplaySurface(const v3kios_display_surface_v1& surface);

@@ -3,6 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Bindable var core: CoreStatusModel
     @State private var showingSettings = false
     @State private var showingPUPImporter = false
@@ -70,6 +71,26 @@ struct RootView: View {
                     presentedGame = nil
                 }
             }
+            .task {
+                guard ProcessInfo.processInfo.arguments.contains("--automation-boot-first-game"),
+                      presentedGame == nil else { return }
+                while core.gameLibraryBusy {
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                try? await Task.sleep(for: .seconds(1))
+                presentedGame = core.games.first
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    core.refreshJITStatus()
+                }
+            }
+            .onOpenURL { url in
+                guard url.scheme?.lowercased() == "vita3kios",
+                      url.host?.lowercased() == "boot-first-game",
+                      presentedGame == nil else { return }
+                presentedGame = core.games.first
+            }
         }
     }
 
@@ -95,25 +116,40 @@ struct RootView: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                 ReadinessCard(
                     title: "Firmware",
-                    detail: core.firmwareReady ? "SceShell files are ready." : "Official user-supplied firmware is required.",
+                    detail: core.firmwareReady ? "Vita system modules are ready for Direct Game." : "Required before starting a game.",
                     symbol: "internaldrive",
                     color: PlayStationAccent.red,
                     ready: core.firmwareReady
                 )
                 ReadinessCard(
                     title: "JIT",
-                    detail: "Signed physical-device verification is required.",
+                    detail: core.jitEnabled ? "Dynamic CPU execution is enabled." : "Required before starting a game.",
                     symbol: "bolt.fill",
                     color: PlayStationAccent.green,
-                    ready: false
+                    ready: core.jitEnabled
                 )
                 ReadinessCard(
                     title: "Renderer",
-                    detail: "MoltenVK device verification is required.",
+                    detail: core.has(CoreCapability.directGame) ? "Vita3K MoltenVK runtime is linked." : "Full renderer runtime is unavailable.",
                     symbol: "square.3.layers.3d",
                     color: PlayStationAccent.pink,
-                    ready: false
+                    ready: core.has(CoreCapability.directGame)
                 )
+            }
+            if !core.jitEnabled {
+                Button("Enable JIT with StikDebug", systemImage: "bolt.badge.clock") {
+                    guard
+                        let bundleIdentifier = Bundle.main.bundleIdentifier,
+                        var components = URLComponents(string: "stikdebug://enable-jit")
+                    else { return }
+                    components.queryItems = [
+                        URLQueryItem(name: "bundle-id", value: bundleIdentifier)
+                    ]
+                    guard let url = components.url else { return }
+                    UIApplication.shared.open(url)
+                }
+                .buttonStyle(.bordered)
+                .tint(PlayStationAccent.green)
             }
         }
     }
@@ -154,7 +190,7 @@ struct RootView: View {
 
             HStack {
                 Menu("Import Firmware", systemImage: "square.and.arrow.down") {
-                    Button("Validate Official PUP", systemImage: "checkmark.shield") {
+                    Button("Install Official PUP", systemImage: "checkmark.shield") {
                         showingPUPImporter = true
                     }
                     Button("Import Extracted VitaFS", systemImage: "folder") {
@@ -273,7 +309,7 @@ private struct GameImportRequirementsCard: View {
                 Label("Not accepted yet: VPK, ZIP, PKG, updates, or DLC", systemImage: "shippingbox")
                     .font(.footnote)
 
-                Text("This build imports metadata and verifies the eboot container. It does not execute Vita guest code yet because the full Vita3K runtime is not linked.")
+                Text("Direct Game uses the linked Vita3K loader, Dynarmic CPU, HLE services, and MoltenVK renderer. Installed firmware and JIT are required before play.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -310,6 +346,7 @@ private struct GameLibraryRow: View {
             Spacer(minLength: 8)
             Button("Play", systemImage: "play.fill", action: play)
                 .buttonStyle(.borderedProminent)
+                .disabled(!core.firmwareReady || core.firmwareBusy)
         }
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

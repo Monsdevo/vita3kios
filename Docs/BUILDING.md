@@ -1,7 +1,10 @@
 # Building
 
-The project includes a generated Apple-native SwiftUI scaffold and a minimal
-versioned Vita3KCore C ABI. The complete emulator is not yet linked or playable.
+The project includes an Apple-native SwiftUI application and a versioned
+Vita3KCore C ABI. Physical-device builds link the pinned Vita3K Direct Game
+runtime, including the loader, HLE services, Dynarmic CPU, MoltenVK renderer,
+audio stack, input bridge and official PUP installer. System Software boot is a
+separate experimental track and is not implemented.
 
 ## Toolchain
 
@@ -83,7 +86,7 @@ The checked toolchain, artifact hashes and baseline results live under
 `Docs/Audits`. This phase produces the macOS reference build used to validate
 the upstream pin.
 
-## M3 application scaffold
+## iOS application and Direct Game runtime
 
 The checked-in source of truth is `App/CMakeLists.txt`; generated Xcode projects
 stay under ignored build directories. Build and test the C ABI on the host:
@@ -92,12 +95,19 @@ stay under ignored build directories. Build and test the C ABI on the host:
 Scripts/build-app.sh host
 ```
 
-Build the SwiftUI shell for Simulator or an unsigned arm64 iPhoneOS artifact:
+Simulator builds use the ABI stub because the current full runtime is arm64
+iPhoneOS-only. Device builds compile and aggregate the iOS dependencies and the
+full Direct Game runtime automatically:
 
 ```sh
 Scripts/build-app.sh simulator
 Scripts/build-app.sh device
 ```
+
+The first full device build can take a long time. Its reusable products are
+kept in `Build/Dependencies`, `Build/Vita3K-iOS` and `Build/Core`. The upstream
+patch is applied only to a materialized source tree under `/tmp`; the pinned
+`External/Vita3K` submodule remains unchanged.
 
 Local signing values must be supplied through environment variables and must
 never be committed:
@@ -110,4 +120,7 @@ Scripts/build-app.sh device
 ```
 
 Signed products are generated under the system temporary directory by default.
-Use `Docs/DEVICE_TESTING.md` for physical-device milestone validation.
+Direct Game testing requires an official user-supplied PlayStation Vita firmware
+PUP, a legally dumped extracted game directory, and JIT enabled for the signed
+application process. Use `Docs/DEVICE_TESTING.md` for physical-device milestone
+validation.

@@ -14,8 +14,9 @@ struct SettingsView: View {
 
                 Section("Firmware") {
                     LabeledContent("Version", value: core.firmwareVersion)
-                    LabeledContent("SceShell", value: core.firmwareReady ? "Ready for preflight" : "Not ready")
+                    LabeledContent("System modules", value: core.firmwareReady ? "Installed" : "Not installed")
                     LabeledContent("PUP validation", value: availability(CoreCapability.firmwarePUPPreflight))
+                    LabeledContent("PUP installation", value: availability(CoreCapability.firmwarePUPInstall))
                     LabeledContent("Partition inventory", value: availability(CoreCapability.firmwareInventory))
                     LabeledContent("Shell preflight", value: availability(CoreCapability.systemShellPreflight))
                 }

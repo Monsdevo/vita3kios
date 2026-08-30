@@ -17,11 +17,11 @@ struct GameplayView: View {
                 Color.black.ignoresSafeArea()
 
                 GameDisplayView { layer, drawableSize, scale in
-                    guard core.attachDisplaySurface(
+                    guard !didRequestBoot, core.attachDisplaySurface(
                         layer,
                         drawableSize: drawableSize,
                         scale: scale
-                    ), !didRequestBoot else { return }
+                    ) else { return }
                     didRequestBoot = true
                     core.bootDirectGame(game)
                 } surfaceDetached: {
@@ -60,7 +60,6 @@ struct GameplayView: View {
         .persistentSystemOverlays(.hidden)
         .statusBarHidden()
         .onAppear {
-            didRequestBoot = false
             requestOrientation(.landscape)
         }
         .onChange(of: input) { _, value in

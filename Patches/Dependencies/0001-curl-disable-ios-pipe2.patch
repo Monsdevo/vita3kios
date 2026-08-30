@@ -1,0 +1,17 @@
+diff --git a/ports/curl/portfile.cmake b/ports/curl/portfile.cmake
+index d9861d6d1..8225a4c52 100644
+--- a/ports/curl/portfile.cmake
++++ b/ports/curl/portfile.cmake
+@@ -68,6 +68,12 @@ if(VCPKG_TARGET_IS_WINDOWS)
+     list(APPEND OPTIONS -DENABLE_UNICODE=ON)
+ endif()
+ 
++# Xcode 27 declares pipe2 for iOS, but it is unavailable before iOS 27. Curl's
++# feature probe otherwise enables it for an iOS 17 deployment target.
++if(VCPKG_TARGET_IS_IOS)
++    list(APPEND OPTIONS -DHAVE_PIPE2=OFF)
++endif()
++
+ vcpkg_find_acquire_program(PKGCONFIG)
+ 
+ vcpkg_cmake_configure(
