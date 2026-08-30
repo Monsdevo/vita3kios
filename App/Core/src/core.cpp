@@ -26,8 +26,9 @@
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #if TARGET_OS_IOS && !TARGET_OS_SIMULATOR
-#include <sys/proc.h>
-#include <sys/sysctl.h>
+#include <mach/mach.h>
+#include <mach/vm_map.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #endif
 #endif
@@ -63,14 +64,29 @@ constexpr std::uint32_t SupportedInputMask =
 
 bool IsJITEnabled() {
 #if defined(__APPLE__) && TARGET_OS_IOS && !TARGET_OS_SIMULATOR
-    int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid() };
-    kinfo_proc processInfo{};
-    std::size_t processInfoSize = sizeof(processInfo);
-    if (sysctl(mib, 4, &processInfo, &processInfoSize, nullptr, 0) != 0 ||
-        processInfoSize < sizeof(processInfo)) {
-        return false;
+    const long configuredPageSize = sysconf(_SC_PAGESIZE);
+    const std::size_t pageSize = configuredPageSize > 0
+        ? static_cast<std::size_t>(configuredPageSize) : 4096U;
+    void* writable = mmap(nullptr, pageSize, PROT_READ | PROT_WRITE,
+                          MAP_ANON | MAP_PRIVATE, -1, 0);
+    if (writable == MAP_FAILED) return false;
+
+    vm_address_t executable = 0;
+    vm_prot_t currentProtection = VM_PROT_NONE;
+    vm_prot_t maximumProtection = VM_PROT_NONE;
+    const kern_return_t remapResult = vm_remap(
+        mach_task_self(), &executable, pageSize, 0,
+        VM_FLAGS_ANYWHERE | VM_FLAGS_RANDOM_ADDR, mach_task_self(),
+        reinterpret_cast<vm_address_t>(writable), false,
+        &currentProtection, &maximumProtection, VM_INHERIT_NONE);
+    bool enabled = false;
+    if (remapResult == KERN_SUCCESS) {
+        enabled = mprotect(reinterpret_cast<void*>(executable), pageSize,
+                           PROT_READ | PROT_EXEC) == 0;
+        munmap(reinterpret_cast<void*>(executable), pageSize);
     }
-    return (processInfo.kp_proc.p_flag & P_TRACED) != 0;
+    munmap(writable, pageSize);
+    return enabled;
 #else
     return true;
 #endif

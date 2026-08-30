@@ -899,3 +899,5 @@ remain informed by probe evidence.
   - Restored upstream-compatible optional-firmware Direct Game boot while keeping
     JIT mandatory and explicitly reporting that a normal install/launch does not
     enable JIT.
+  - Replaced debugger-presence JIT detection with a real dual-mapped executable
+    memory permission probe matching Dynarmic's iOS code-cache strategy.
