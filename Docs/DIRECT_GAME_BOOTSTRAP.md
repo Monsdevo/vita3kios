@@ -63,6 +63,15 @@ content-decryption installation path, which is not part of this folder preflight
 
 ## Exact current gate
 
+The latest 2026-09-05 device run passed the JIT and host SpinLock faults and
+executed Minecraft's module/service calls. It then loaded
+`app0:sce_module/steroid.suprx`, which the pinned upstream loader explicitly
+rejects as an unsupported Vitamin dump. Missing runtime imports followed and
+the guest reached PC zero without presenting a frame. A compatible replacement
+dump is required for further acceptance testing. Firmware alone does not
+convert this input. The app now reports this condition before entering the
+runtime, even when JIT is unavailable, and preserves the imported library item.
+
 With JIT enabled, Minecraft PCSB00560 reaches `Game main thread started` on an
 iPhone 15 Pro. Vita3K creates the Apple GPU Vulkan device, links the game SELF,
 starts the guest main thread, and runs the MoltenVK render thread. The original
@@ -78,24 +87,51 @@ compatibility input, while JIT remains mandatory for guest execution.
 
 ## Device test for this gate
 
-The 2026-09-05 signed build installed and launched on the test iPhone. Its ABI v5
-query and allocator self-test passed, and the executable-memory permission probe
-returned true for that process. The rebuilt Vulkan renderer references the
-statically linked MoltenVK entry point directly. This addresses stale objects
-that had retained the dynamic Vulkan loader path. A fresh Minecraft boot remains
-unverified: the current app container has an empty game library, so the title
-must be imported again before the first-frame test can continue. The permission
-probe alone does not establish successful guest execution.
+The 2026-09-05 Minecraft retest confirmed that MoltenVK creates the Apple GPU
+device and swapchain, and the game SELF loads. The first generated instruction
+then triggered `CODESIGNING / Invalid Page` and `SIGKILL`. The original memory
+permission probe had returned a false positive: `mprotect(PROT_EXEC)` succeeded
+without authorization to execute unsigned code.
+
+Requiring `CS_DEBUGGED` prevented the normal-launch crash, but a debugger-enabled
+retest exposed a second protection fault in the RW-origin code mapping. A plain
+debugger attachment is therefore insufficient for this iOS development target.
+
+The JIT allocator now starts with RX memory, creates its separate writable alias,
+and calls a debugger page-preparation hook before enabling writes. The helper
+acknowledges only after writing the entire RX range through debugserver. Without
+that acknowledgement, allocation fails before generated code is executed. The
+readiness probe uses the same allocator and tests execution and rewriting of a
+small function (42, then 43). Each Dynarmic code cache uses this path too.
+
+The probe passed on the physical device. Minecraft subsequently hit a separate
+generated host SpinLock helper, which has now been replaced with native
+acquire/release atomic operations on iOS. The emitted guest-side locking ABI is
+unchanged. Each guest thread's code cache is capped at 16 MiB to bound eager
+debugger page preparation; Dynarmic retains its normal cache-recycling behavior.
+
+This development workflow requires the connected Mac helper to remain attached
+while playing, including when the game creates new CPU code caches. The app no
+longer advertises a plain StikDebug launch as sufficient. References:
+[Apple code-signing status](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/cs_blobs.h)
+and [Dart's iOS RX-page preparation](https://github.com/dart-lang/sdk/blob/main/runtime/vm/virtual_memory_posix.cc).
 
 1. Build, sign, and sideload the current app.
 2. Optionally select **Install Official PUP** to provide the user-owned firmware
    compatibility files used by some titles.
-3. Enable JIT through the verified local sideload workflow. A normal app launch
-   after installation does not enable JIT by itself.
+3. A normal launch must report JIT unavailable and must not crash on **Play**.
 4. Tap **Import** in **Games** and select an extracted game directory.
 5. Confirm that the native library shows its title, title ID, version, size, and
    icon when available.
-6. Tap **Play**.
+6. Run the following command on the connected Mac. It opens the native library,
+   attaches the page helper, and then activates the first imported game.
+   Keep its debugger session open while testing.
+
+   ```sh
+   VITA3KIOS_DEBUG_EXECUTABLE=/path/to/vita3kios.app/vita3kios \
+   VITA3KIOS_PRODUCT_BUNDLE_IDENTIFIER=your.reverse.dns.vita3kios \
+   Scripts/launch-game-with-jit.sh YOUR_DEVICE_IDENTIFIER
+   ```
 7. Confirm that the gameplay surface, compact controller, and top-left HUD appear.
 8. Confirm that the checkpoint advances from `Game main thread started` to
    `First guest game frame presented` and that FPS becomes valid.

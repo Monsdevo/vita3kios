@@ -54,6 +54,7 @@ endif()
 
 add_library(Vita3KCore STATIC
     Core/src/core.cpp
+    Core/src/jit_memory_ios.cpp
     ${VITA3KIOS_RUNTIME_SOURCE}
     "${VITA3KIOS_SOURCE_ROOT}/vita3k/mem/src/allocator.cpp"
 )

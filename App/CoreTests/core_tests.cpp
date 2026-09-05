@@ -258,6 +258,17 @@ int main() {
     assert(directReport.checkpoint == V3KIOS_DIRECT_BOOT_CHECKPOINT_EBOOT_CONTAINER_VERIFIED);
     assert(directReport.blocker == V3KIOS_DIRECT_BOOT_BLOCKER_UPSTREAM_CORE_NOT_LINKED);
 
+    const auto vitaminRoot = MakeSyntheticGame(fixtureRoot / "data" / "vitamin-fixture");
+    WriteFile(vitaminRoot / "sce_module/steroid.suprx", {'S', 'C', 'E', 0});
+    v3kios_game_info_v1 vitaminInfo{};
+    vitaminInfo.struct_size = sizeof(vitaminInfo);
+    assert(v3kios_core_inventory_game(handle, vitaminRoot.c_str(), &vitaminInfo) == V3KIOS_RESULT_OK);
+    const std::string vitaminGeneration{vitaminInfo.generation_id};
+    assert(v3kios_core_boot_direct_game(handle, vitaminRoot.c_str(), vitaminGeneration.c_str(),
+                                       &directReport) == V3KIOS_RESULT_GAME_NOT_READY);
+    assert(directReport.blocker == V3KIOS_DIRECT_BOOT_BLOCKER_UNSUPPORTED_DUMP);
+    assert(std::string{directReport.detail}.find("Vitamin dump") != std::string::npos);
+
     v3kios_input_state_v1 input{};
     input.struct_size = sizeof(input);
     input.left_x = 2.0F;

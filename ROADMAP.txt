@@ -1,5 +1,5 @@
 vita3kios — MASTER ROADMAP
-Version: 0.12
+Version: 0.13
 Created: 2026-08-22
 Status: M0 COMPLETE — DIRECT GAME MODE IS THE PRIMARY ACTIVE DELIVERY PATH
 
@@ -68,8 +68,32 @@ CURRENT STATUS
   [~] The rebuilt Vulkan renderer references static MoltenVK directly. Core
       cache invalidation now tracks the upstream revision and patch hash per
       checkout, preventing stale dynamic-loader objects after patch changes.
-      A fresh Minecraft boot is pending reimport into the currently empty device
-      library; no new guest-frame or playability result is claimed.
+      The initial empty-library blocker was superseded by reimport and the
+      device findings below; no guest-frame or playability result is claimed.
+  [x] After Minecraft reimport, the 2026-09-05 device run created the MoltenVK
+      GPU device/swapchain and loaded the game SELF, confirming the loader fix.
+  [x] Diagnosed the subsequent first-instruction crash as CODESIGNING / Invalid
+      Page. Corrected the false-positive JIT gate to require CS_DEBUGGED plus
+      dual-map permissions. Normal automatic game launch now reports a JIT
+      blocker without crashing. Earlier permission-only success is not JIT proof.
+  [~] A debugger-enabled retest exposed an additional RX mapping protection
+      fault. Added RX-first allocation, debugger page preparation, and a shared
+      execute/rewrite probe used by the JIT gate and Dynarmic allocation path.
+      The current workflow requires the connected Mac page helper while playing.
+  [x] The RX-page helper passed the physical-device execute/rewrite probe.
+      Minecraft then reached a separate legacy SpinLock JIT helper fault.
+  [x] Replaced the iOS host SpinLock helper with native acquire/release atomics
+      and reduced the per-thread code cache to 16 MiB after measuring expensive
+      128 MiB debugger preparation. The native lock passed an eight-thread,
+      800,000-update contention test on the arm64 host. The device retest passed
+      that former fault and executed Minecraft's guest module/service calls.
+  [!] First guest frame is blocked by the imported title's unsupported Vitamin
+      dump: upstream rejects app0:sce_module/steroid.suprx. The observed guest
+      then called missing runtime functions and reached PC zero. A compatible
+      replacement dump is required; firmware alone cannot convert this dump.
+  [x] Added an early typed unsupported-dump blocker before JIT/runtime startup,
+      retaining the imported library item and explaining the issue in the app.
+      Synthetic regression tests cover this path.
 
 ==============================================================================
 1. FIXED PRODUCT DEFINITION
@@ -919,3 +943,25 @@ remain informed by probe evidence.
     reimport and a fresh first-frame test remain the next acceptance step.
   - Moved active development to a fully local checkout after cloud eviction
     stalled Git metadata and build artifacts in the original Desktop workspace.
+
+2026-09-05 — v0.13
+  - Reproduced Minecraft's first-instruction SIGKILL and read its system crash
+    report: CODESIGNING / Invalid Page in the Dynarmic executable mapping.
+  - Required persistent code-signing debug authorization before accepting the
+    dual-mapping permission probe. A normal automatic Minecraft launch now stays
+    alive and reports the typed JIT blocker instead of entering unauthorized code.
+  - Confirmed that the previous Vulkan loader failure is resolved on device:
+    MoltenVK creates the GPU device and swapchain, and the game SELF loads.
+  - Added a debugger page-preparation helper and automatic first-game launcher
+    after plain debugger attachment still faulted in the RW-origin code mapping.
+    JIT readiness now requires an acknowledged RX mapping and actual execution
+    and rewriting through its separate writable alias.
+  - Verified generated-code execution and rewriting on the physical device,
+    then diagnosed a separate generated SpinLock helper still using old memory.
+  - Replaced that iOS host helper with native atomic operations and bounded each
+    guest thread's eagerly prepared code cache at 16 MiB.
+  - The device retest passed the host/JIT faults and executed Minecraft code.
+    Upstream then explicitly rejected the supplied Vitamin steroid.suprx module,
+    followed by missing runtime imports and null guest-PC reads. No frame appeared.
+  - Added a typed early Vitamin-dump rejection and an in-app explanation without
+    deleting the imported title. A compatible game dump is the next input gate.

@@ -109,6 +109,11 @@ kept in `Build/Dependencies`, `Build/Vita3K-iOS` and `Build/Core`. The upstream
 patch is applied only to a materialized source tree under `/tmp`; the pinned
 `External/Vita3K` submodule remains unchanged.
 
+For the current device JIT workflow, use `Scripts/launch-game-with-jit.sh` after
+installing the signed app and importing a title. This keeps an LLDB page helper
+connected while the game runs; a normal launch or plain debugger attach does
+not prepare the code pages. See [Direct Game testing](DIRECT_GAME_BOOTSTRAP.md).
+
 Each core build records both the upstream revision and the iOS patch hash.
 Changing either invalidates the core object cache, even when another checkout
 has already refreshed the shared temporary source tree. This prevents archived

@@ -196,15 +196,8 @@ final class CoreStatusModel {
             return
         }
         refreshJITStatus()
-        guard jitEnabled else {
-            activeGame = game
-            directBootCheckpoint = "Game eboot SELF container verified"
-            directBootBlocker = "JIT is not enabled for this process"
-            directBootDetail = "Enable JIT with StikDebug, then reopen the game."
-            error = "JIT must be enabled before starting a game."
-            writeDirectGameReport(result: V3KIOS_RESULT_GAME_NOT_READY)
-            return
-        }
+        // The core checks content compatibility before JIT readiness so an
+        // unsupported dump produces actionable guidance even without JIT.
         directBootRequestGeneration = game.generation
         firstGuestFrameReported = false
         activeGame = game

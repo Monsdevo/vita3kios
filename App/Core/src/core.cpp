@@ -26,10 +26,7 @@
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #if TARGET_OS_IOS && !TARGET_OS_SIMULATOR
-#include <mach/mach.h>
-#include <mach/vm_map.h>
-#include <sys/mman.h>
-#include <unistd.h>
+extern "C" bool v3kios_jit_memory_available();
 #endif
 #endif
 
@@ -64,29 +61,7 @@ constexpr std::uint32_t SupportedInputMask =
 
 bool IsJITEnabled() {
 #if defined(__APPLE__) && TARGET_OS_IOS && !TARGET_OS_SIMULATOR
-    const long configuredPageSize = sysconf(_SC_PAGESIZE);
-    const std::size_t pageSize = configuredPageSize > 0
-        ? static_cast<std::size_t>(configuredPageSize) : 4096U;
-    void* writable = mmap(nullptr, pageSize, PROT_READ | PROT_WRITE,
-                          MAP_ANON | MAP_PRIVATE, -1, 0);
-    if (writable == MAP_FAILED) return false;
-
-    vm_address_t executable = 0;
-    vm_prot_t currentProtection = VM_PROT_NONE;
-    vm_prot_t maximumProtection = VM_PROT_NONE;
-    const kern_return_t remapResult = vm_remap(
-        mach_task_self(), &executable, pageSize, 0,
-        VM_FLAGS_ANYWHERE | VM_FLAGS_RANDOM_ADDR, mach_task_self(),
-        reinterpret_cast<vm_address_t>(writable), false,
-        &currentProtection, &maximumProtection, VM_INHERIT_NONE);
-    bool enabled = false;
-    if (remapResult == KERN_SUCCESS) {
-        enabled = mprotect(reinterpret_cast<void*>(executable), pageSize,
-                           PROT_READ | PROT_EXEC) == 0;
-        munmap(reinterpret_cast<void*>(executable), pageSize);
-    }
-    munmap(writable, pageSize);
-    return enabled;
+    return v3kios_jit_memory_available();
 #else
     return true;
 #endif
@@ -942,6 +917,14 @@ extern "C" v3kios_result_v1 v3kios_core_boot_direct_game(
             return V3KIOS_RESULT_INVALID_GAME;
         }
         out_report->checkpoint = V3KIOS_DIRECT_BOOT_CHECKPOINT_GAME_CONTENT_VERIFIED;
+        if (filesystem::is_regular_file(context->probeGame.root / "sce_module/steroid.suprx")) {
+            context->directBootDetail =
+                "This is a Vitamin dump (sce_module/steroid.suprx), which the Vita3K loader does not support. "
+                "Import a compatible dump made from your own game. Renaming or removing this file will not convert the dump.";
+            out_report->blocker = V3KIOS_DIRECT_BOOT_BLOCKER_UNSUPPORTED_DUMP;
+            out_report->detail = context->directBootDetail.c_str();
+            return V3KIOS_RESULT_GAME_NOT_READY;
+        }
         const auto eboot = context->probeGame.root / context->probeGame.ebootRelativePath;
         if (!filesystem::is_regular_file(eboot)) {
             context->directBootDetail = "The imported eboot.bin is missing.";
@@ -958,7 +941,7 @@ extern "C" v3kios_result_v1 v3kios_core_boot_direct_game(
         out_report->checkpoint = V3KIOS_DIRECT_BOOT_CHECKPOINT_EBOOT_CONTAINER_VERIFIED;
         if (!IsJITEnabled()) {
             context->directBootDetail =
-                "JIT is not enabled for this process. Enable JIT with StikDebug, then reopen the game.";
+                "JIT code memory is not ready. Connect the vita3kios JIT debugger helper on your Mac, then reopen the game.";
             out_report->blocker = V3KIOS_DIRECT_BOOT_BLOCKER_JIT_NOT_ENABLED;
             out_report->detail = context->directBootDetail.c_str();
             return V3KIOS_RESULT_GAME_NOT_READY;
@@ -1159,6 +1142,7 @@ extern "C" const char* v3kios_direct_boot_blocker_description(
     case V3KIOS_DIRECT_BOOT_BLOCKER_GENERATION_MISMATCH: return "Game generation mismatch";
     case V3KIOS_DIRECT_BOOT_BLOCKER_PARAM_SFO_INVALID: return "Game param.sfo is invalid";
     case V3KIOS_DIRECT_BOOT_BLOCKER_EBOOT_MISSING: return "Game eboot.bin is missing";
+    case V3KIOS_DIRECT_BOOT_BLOCKER_UNSUPPORTED_DUMP: return "Unsupported Vitamin game dump";
     case V3KIOS_DIRECT_BOOT_BLOCKER_EBOOT_CONTAINER_INVALID: return "Game eboot SELF container is invalid";
     case V3KIOS_DIRECT_BOOT_BLOCKER_UPSTREAM_CORE_NOT_LINKED: return "Full Vita3K runtime is not linked into the iOS core target";
     case V3KIOS_DIRECT_BOOT_BLOCKER_CORE_INITIALIZATION_FAILED: return "Vita3K game runtime initialization failed";

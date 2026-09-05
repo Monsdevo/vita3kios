@@ -541,6 +541,27 @@ diff --git a/external/dynarmic/src/dynarmic/backend/arm64/address_space.cpp b/ex
 diff --git a/external/dynarmic/externals/oaknut/include/oaknut/dual_code_block.hpp b/external/dynarmic/externals/oaknut/include/oaknut/dual_code_block.hpp
 --- a/external/dynarmic/externals/oaknut/include/oaknut/dual_code_block.hpp
 +++ b/external/dynarmic/externals/oaknut/include/oaknut/dual_code_block.hpp
+@@ -29,6 +29,10 @@
+ #    include <unistd.h>
+ #endif
+ 
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++extern "C" bool v3kios_jit_allocate(std::size_t, std::uint32_t**, std::uint32_t**);
++#endif
++
+ namespace oaknut {
+ 
+ class DualCodeBlock {
+@@ -41,6 +45,9 @@
+         m_wmem = m_xmem = (std::uint32_t*)VirtualAlloc(nullptr, size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+         if (m_wmem == nullptr)
+             throw std::bad_alloc{};
++#elif defined(__APPLE__) && TARGET_OS_IPHONE
++        if (!v3kios_jit_allocate(size, &m_wmem, &m_xmem))
++            throw std::bad_alloc{};
+ #elif defined(__APPLE__)
+         m_wmem = (std::uint32_t*)mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+         if (m_wmem == MAP_FAILED)
 @@ -81,6 +81,8 @@
  #if defined(_WIN32)
          VirtualFree((void*)m_xmem, 0, MEM_RELEASE);
@@ -550,3 +571,67 @@ diff --git a/external/dynarmic/externals/oaknut/include/oaknut/dual_code_block.h
  #else
          munmap(m_wmem, m_size);
          munmap(m_xmem, m_size);
+diff --git a/external/dynarmic/src/dynarmic/common/spin_lock_arm64.cpp b/external/dynarmic/src/dynarmic/common/spin_lock_arm64.cpp
+--- a/external/dynarmic/src/dynarmic/common/spin_lock_arm64.cpp
++++ b/external/dynarmic/src/dynarmic/common/spin_lock_arm64.cpp
+@@ -35,6 +35,7 @@
+     code.STLR(WZR, ptr);
+ }
+ 
++#if !defined(__APPLE__) || !TARGET_OS_IPHONE
+ namespace {
+ 
+ struct SpinLockImpl {
+@@ -73,13 +74,26 @@
+ }
+ 
+ }  // namespace
++#endif
+ 
+ void SpinLock::Lock() {
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++    // Match the generated guest-side acquire operation without a second JIT
++    // allocation for this host-side helper.
++    while (__atomic_exchange_n(&storage, 1, __ATOMIC_ACQUIRE) != 0) {
++        asm volatile("yield" ::: "memory");
++    }
++#else
+     std::call_once(flag, &SpinLockImpl::Initialize, impl);
+     impl.lock(&storage);
++#endif
+ }
+ 
+ void SpinLock::Unlock() {
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++    __atomic_store_n(&storage, 0, __ATOMIC_RELEASE);
++#else
+     std::call_once(flag, &SpinLockImpl::Initialize, impl);
+     impl.unlock(&storage);
++#endif
+ }
+diff --git a/vita3k/cpu/src/dynarmic_cpu.cpp b/vita3k/cpu/src/dynarmic_cpu.cpp
+--- a/vita3k/cpu/src/dynarmic_cpu.cpp
++++ b/vita3k/cpu/src/dynarmic_cpu.cpp
+@@ -29,6 +29,10 @@
+ #include <bit>
+ #include <memory>
+ #include <optional>
+ #include <string>
++
++#if defined(__APPLE__)
++#include <TargetConditionals.h>
++#endif
+ 
+ class ArmDynarmicCP15 : public Dynarmic::A32::Coprocessor {
+@@ -334,6 +338,11 @@
+ 
+ std::unique_ptr<Dynarmic::A32::Jit> DynarmicCPU::make_jit() {
+     Dynarmic::A32::UserConfig config{};
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++    // Code pages are prepared eagerly by the debugger on iOS. Bound the memory
++    // and remote-write cost per guest thread; Dynarmic can recycle this cache.
++    config.code_cache_size = 16 * 1024 * 1024;
++#endif
+     config.arch_version = Dynarmic::A32::ArchVersion::v7;
+     config.callbacks = cb.get();
+     if (parent->mem->use_page_table) {

@@ -137,19 +137,9 @@ struct RootView: View {
                 )
             }
             if !core.jitEnabled {
-                Button("Enable JIT with StikDebug", systemImage: "bolt.badge.clock") {
-                    guard
-                        let bundleIdentifier = Bundle.main.bundleIdentifier,
-                        var components = URLComponents(string: "stikdebug://enable-jit")
-                    else { return }
-                    components.queryItems = [
-                        URLQueryItem(name: "bundle-id", value: bundleIdentifier)
-                    ]
-                    guard let url = components.url else { return }
-                    UIApplication.shared.open(url)
-                }
-                .buttonStyle(.bordered)
-                .tint(PlayStationAccent.green)
+                Label("This development build requires the vita3kios JIT debugger helper on a connected Mac. Keep the helper running while playing.", systemImage: "bolt.badge.clock")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -314,6 +304,10 @@ private struct GameImportRequirementsCard: View {
 
                 Label("Not accepted yet: VPK, ZIP, PKG, updates, or DLC", systemImage: "shippingbox")
                     .font(.footnote)
+
+                Text("Vitamin dumps containing sce_module/steroid.suprx are unsupported. Changing the archive format or removing that file does not convert the dump.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
 
                 Text("Direct Game uses the linked Vita3K loader, Dynarmic CPU, HLE services, and MoltenVK renderer. JIT is required; installed firmware may provide additional compatibility files.")
                     .font(.footnote)
