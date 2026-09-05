@@ -109,6 +109,16 @@ kept in `Build/Dependencies`, `Build/Vita3K-iOS` and `Build/Core`. The upstream
 patch is applied only to a materialized source tree under `/tmp`; the pinned
 `External/Vita3K` submodule remains unchanged.
 
+Each core build records both the upstream revision and the iOS patch hash.
+Changing either invalidates the core object cache, even when another checkout
+has already refreshed the shared temporary source tree. This prevents archived
+source timestamps from hiding patch changes from Ninja. Dependency builds are
+retained.
+
+Keep the working checkout and its build products in a fully local directory,
+outside cloud-synchronized Desktop or Documents folders. Cloud eviction can
+turn Git metadata and archives into download placeholders and stall builds.
+
 Local signing values must be supplied through environment variables and must
 never be committed:
 

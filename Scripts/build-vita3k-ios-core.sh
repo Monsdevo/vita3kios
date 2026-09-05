@@ -54,6 +54,15 @@ if [ "$VITA3KIOS_SOURCE_READY" -eq 0 ]; then
     mv -- "$VITA3KIOS_SOURCE_STAGE" "$VITA3KIOS_SOURCE_DIR"
 fi
 
+# Check the build tree independently of the shared source tree: another checkout
+# may already have refreshed the sources while this checkout still has old objects.
+# Archive timestamps are not a reliable indicator of a patch-only source change.
+VITA3KIOS_BUILD_ID="$VITA3KIOS_UPSTREAM_REVISION:$VITA3KIOS_PATCH_SHA"
+if [ ! -f "$VITA3KIOS_BUILD_DIR/.vita3kios-source-id" ] || \
+   [ "$(sed -n '1p' "$VITA3KIOS_BUILD_DIR/.vita3kios-source-id")" != "$VITA3KIOS_BUILD_ID" ]; then
+    rm -rf -- "$VITA3KIOS_BUILD_DIR"
+fi
+
 VITA3KIOS_SYSROOT=$(xcrun --sdk iphoneos --show-sdk-path)
 
 cmake -S "$VITA3KIOS_SOURCE_DIR" -B "$VITA3KIOS_BUILD_DIR" -G Ninja \
@@ -80,6 +89,10 @@ cmake -S "$VITA3KIOS_SOURCE_DIR" -B "$VITA3KIOS_BUILD_DIR" -G Ninja \
     -DUSE_LTO=NEVER \
     -DBUILD_TESTING=OFF \
     -DCAPSTONE_BUILD_MACOS_THIN=ON
+
+# Record the configured source identity before compilation so an interrupted
+# build can resume its valid partial objects on the next invocation.
+printf '%s\n' "$VITA3KIOS_BUILD_ID" > "$VITA3KIOS_BUILD_DIR/.vita3kios-source-id"
 
 CCACHE_DISABLE=1 cmake --build "$VITA3KIOS_BUILD_DIR" --target vita3k \
     --parallel "$VITA3KIOS_BUILD_JOBS"

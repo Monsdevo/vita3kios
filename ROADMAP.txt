@@ -1,5 +1,5 @@
 vita3kios — MASTER ROADMAP
-Version: 0.11
+Version: 0.12
 Created: 2026-08-22
 Status: M0 COMPLETE — DIRECT GAME MODE IS THE PRIMARY ACTIVE DELIVERY PATH
 
@@ -63,6 +63,13 @@ CURRENT STATUS
   [~] Direct Game Mode is the primary implementation path until a user-supplied
       game boots visibly and repeatably on a physical iPhone. Authentic System
       Software remains a later research path and must not block Direct Game.
+  [x] The 2026-09-05 signed device build installed and launched with ABI v5,
+      allocator self-test success, and executable-memory permission available.
+  [~] The rebuilt Vulkan renderer references static MoltenVK directly. Core
+      cache invalidation now tracks the upstream revision and patch hash per
+      checkout, preventing stale dynamic-loader objects after patch changes.
+      A fresh Minecraft boot is pending reimport into the currently empty device
+      library; no new guest-frame or playability result is claimed.
 
 ==============================================================================
 1. FIXED PRODUCT DEFINITION
@@ -901,3 +908,14 @@ remain informed by probe evidence.
     enable JIT.
   - Replaced debugger-presence JIT detection with a real dual-mapped executable
     memory permission probe matching Dynarmic's iOS code-cache strategy.
+
+2026-09-05 — v0.12
+  - Invalidated each checkout's core object cache when the upstream revision or
+    iOS patch hash changes, independently of shared temporary source state.
+  - Verified direct static MoltenVK dispatch in the rebuilt renderer object.
+  - Passed the host core tests and installed/launched the signed app on iPhone;
+    ABI v5, allocator self-test, and executable-memory permission checks passed.
+  - Recorded an empty game library in the current device container. Minecraft
+    reimport and a fresh first-frame test remain the next acceptance step.
+  - Moved active development to a fully local checkout after cloud eviction
+    stalled Git metadata and build artifacts in the original Desktop workspace.

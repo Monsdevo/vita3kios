@@ -78,6 +78,15 @@ compatibility input, while JIT remains mandatory for guest execution.
 
 ## Device test for this gate
 
+The 2026-09-05 signed build installed and launched on the test iPhone. Its ABI v5
+query and allocator self-test passed, and the executable-memory permission probe
+returned true for that process. The rebuilt Vulkan renderer references the
+statically linked MoltenVK entry point directly. This addresses stale objects
+that had retained the dynamic Vulkan loader path. A fresh Minecraft boot remains
+unverified: the current app container has an empty game library, so the title
+must be imported again before the first-frame test can continue. The permission
+probe alone does not establish successful guest execution.
+
 1. Build, sign, and sideload the current app.
 2. Optionally select **Install Official PUP** to provide the user-owned firmware
    compatibility files used by some titles.
